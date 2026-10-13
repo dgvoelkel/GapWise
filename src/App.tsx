@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { CalendarDays, ListTodo, Settings as Cog, Sun, Clock, MapPin, Footprints, ShieldCheck, ChevronRight, X, Plus, Check, AlertTriangle, CircleCheck, CircleSlash, Coffee, Info, ArrowDown, MoreHorizontal, Armchair, Navigation, Flag, Leaf, Circle } from 'lucide-react';
+import { CalendarDays, ListTodo, Settings as Cog, Sun, Clock, MapPin, Footprints, ShieldCheck, ChevronRight, X, Plus, Check, AlertTriangle, CircleCheck, CircleSlash, Coffee, Info, ArrowDown, MoreHorizontal, Armchair, Navigation, Flag, Leaf, Circle, Printer, Utensils, BookOpen, Dumbbell, Sparkles, Wifi, Signal, BatteryFull } from 'lucide-react';
 import { type Activity, type Commitment, type Eval, type Fit, type Gap, type Prefs, type Priority, BASE_ACTS, LOC_NAMES, SCENARIOS, combos, dur, evaluate, fmt, gapsFor, rank, travel } from './gw/logic';
 
 type Assign = { kind: 'act'; id: string; title: string } | { kind: 'open' } | { kind: 'skip' };
@@ -9,6 +9,9 @@ const DAYS = ['Today', 'Tomorrow', 'Thursday'];
 const btn = 'min-h-11 rounded-xl px-4 text-[15px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1f5c43]';
 const P = 'bg-[#1f5c43] text-white hover:bg-[#184a36]', S = 'bg-white border border-[#d9d4c7] text-[#1b2433] hover:bg-[#f3efe4]';
 
+const ICON: Record<string, typeof Coffee> = { print: Printer, lunch: Utensils, study: BookOpen, coffee: Coffee, workout: Dumbbell };
+const TINT: Record<string, string> = { print: 'bg-[#e3efe8] text-[#1f5c43]', lunch: 'bg-[#f8ecc8] text-[#7a5a0c]', study: 'bg-[#e2eff0] text-[#2b6b72]', coffee: 'bg-[#f3e6da] text-[#7a4a22]', workout: 'bg-[#e8e6f3] text-[#4a4580]' };
+export function ActIcon({ id, size = 40 }: { id: string; size?: number }) { const I = ICON[id] ?? Sparkles; return <span style={{ width: size, height: size }} className={`flex shrink-0 items-center justify-center rounded-xl ${TINT[id] ?? 'bg-[#efede8] text-[#4a4f58]'}`}><I size={size * 0.48} /></span>; }
 export function FitBadge({ fit }: { fit: Fit }) {
   const m = { comfortable: ['Comfortable fit', CircleCheck, 'bg-[#e3efe8] text-[#1f5c43]'], tight: ['Tight fit', AlertTriangle, 'bg-[#f8ecc8] text-[#7a5a0c]'], none: ["Doesn't fit", CircleSlash, 'bg-[#eceae6] text-[#4a4f58]'] }[fit] as [string, typeof Check, string];
   const I = m[1]; return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${m[2]}`}><I size={13} />{m[0]}</span>;
@@ -42,14 +45,14 @@ export function RouteView({ g, e }: { g: Gap; e?: Eval }) {
   </div>;
 }
 export function CommitmentBlock({ c, onMenu }: { c: Commitment; onMenu: () => void }) {
-  return <div className={`flex items-start gap-3 rounded-2xl p-4 ${c.canceled ? 'border border-dashed border-[#9aa3ad] bg-transparent text-[#5b616b]' : 'bg-[#1b2433] text-white'}`}>
+  return <div className={`flex items-start gap-3 rounded-2xl p-4 ${c.canceled ? 'border border-dashed border-[#9aa3ad] bg-transparent text-[#5b616b]' : 'bg-gradient-to-br from-[#1b2433] to-[#2a3a4f] text-white shadow-[0_6px_16px_-8px_rgba(27,36,51,.6)]'} relative overflow-hidden`}>{!c.canceled && <i className="absolute -right-6 -top-6 size-24 rounded-full bg-white/5" />}<span className={`mt-1 h-10 w-1.5 shrink-0 rounded-full ${c.canceled ? 'bg-[#9aa3ad]' : 'bg-[#d9a84a]'}`} />
     <div className="flex-1"><div className="text-sm opacity-80">{fmt(c.start)} – {fmt(c.end)}</div><div className={`text-[17px] font-bold ${c.canceled ? 'line-through' : ''}`}>{c.title}{c.canceled && ' · Canceled'}</div><div className="flex items-center gap-1 text-sm opacity-80"><MapPin size={13} />{c.location}{c.recurrence.length > 0 && ` · ${c.recurrence.join(' ')}`}</div></div>
     <button aria-label={`Options for ${c.title}`} onClick={onMenu} className="flex size-11 items-center justify-center rounded-full hover:bg-white/10"><MoreHorizontal size={20} /></button></div>;
 }
 export function RecommendationCard({ e, onAdd, onWhy, compact }: { e: Eval; onAdd: () => void; onWhy: () => void; compact?: boolean }) {
-  return <div className="rounded-2xl border border-[#d9d4c7] bg-white p-3.5">
-    <div className="flex items-start justify-between gap-2"><div><div className="text-[16px] font-bold">{e.a.title}{e.a.locations.length > 0 ? ` at ${e.loc}` : ''}</div>
-      <div className="mt-0.5 text-sm text-[#4a4f58]">{e.a.duration} min · {e.t1 === 0 ? 'No extra travel' : `${e.t1} min away`} · Leaves {Math.max(e.remaining, 0)} min</div></div><FitBadge fit={e.fit} /></div>
+  return <div className="rounded-2xl border border-[#e3ddcd] bg-white p-3.5 shadow-[0_1px_0_#e6e1d4] transition hover:-translate-y-px hover:shadow-md">
+    <div className="flex items-start justify-between gap-2"><div className="flex gap-3"><ActIcon id={e.a.id.split('+')[0]} /><div><div className="text-[16px] font-bold">{e.a.title}{e.a.locations.length > 0 ? ` at ${e.loc}` : ''}</div>
+      <div className="mt-0.5 text-sm text-[#4a4f58]">{e.a.duration} min · {e.t1 === 0 ? 'No extra travel' : `${e.t1} min away`} · Leaves {Math.max(e.remaining, 0)} min</div></div></div><FitBadge fit={e.fit} /></div>
     <div className="mt-2 flex flex-wrap gap-1.5"><PriorityTag p={e.a.priority} />{e.a.deadline != null && <span className="rounded-full bg-[#f8ecc8] px-2 py-0.5 text-xs font-medium text-[#7a5a0c]">Due {fmt(e.a.deadline)}</span>}</div>
     <p className="mt-2 text-sm text-[#1b2433]">{e.fit === 'tight' ? 'Tight fit — little room for delays. ' : ''}{e.reason}</p>
     {!compact && <div className="mt-3 flex gap-2"><button className={`${btn} ${P} flex-1`} onClick={onAdd}>Add to gap</button><button className={`${btn} ${S}`} onClick={onWhy}>Why it fits</button></div>}
@@ -71,7 +74,7 @@ export function EmptyGapState({ g, onOpen }: { g: Gap; onOpen: () => void }) {
 }
 export function GapCard({ g, st, onDetail, onAdd, onWhy, onKeep, onUndo, onDone }: { g: Gap; st: St; onDetail: () => void; onAdd: (e: Eval) => void; onWhy: (e: Eval) => void; onKeep: () => void; onUndo: () => void; onDone: (id: string) => void }) {
   const { fits } = rank(st.acts, g, st.prefs); const a = st.assign[g.key];
-  return <div className="my-2 ml-4 rounded-2xl border-2 border-dashed border-[#c9d9cf] bg-[#f3f8f4] p-4">
+  return <div className="relative my-3 ml-5 rounded-2xl border-2 border-dashed border-[#bcd3c4] bg-gradient-to-b from-[#f1f8f3] to-[#fbf8f1] p-4 before:absolute before:-left-[22px] before:top-0 before:h-full before:border-l-2 before:border-dotted before:border-[#bcd3c4] before:content-['']">
     <button onClick={onDetail} className="block w-full text-left"><div className="flex items-center justify-between"><span className="text-sm font-semibold text-[#4a4f58]">{dur(g.total)} gap · {fmt(g.start)}–{fmt(g.end)}</span><ChevronRight size={18} /></div>
       <UsableTimeBreakdown g={g} /><div className="mt-1 text-sm text-[#4a4f58]">Next: <b className="text-[#1b2433]">{g.next.title}</b> at {fmt(g.next.start)}, {g.next.location}</div></button>
     <div className="mt-3 space-y-2">
@@ -169,7 +172,7 @@ export function BufferSelector({ v, onChange }: { v: number; onChange: (n: numbe
 }
 export function ActivityCard({ a, onClick }: { a: Activity; onClick: () => void }) {
   return <button onClick={onClick} className="flex w-full items-center gap-3 rounded-2xl border border-[#d9d4c7] bg-white p-4 text-left hover:bg-[#f7f4ec]">
-    <div className="flex-1"><div className={`text-[16px] font-bold ${a.done ? 'line-through opacity-60' : ''}`}>{a.title}{a.done && ' · Done'}</div><div className="text-sm text-[#4a4f58]">{a.duration} min · {a.locations.length ? a.locations.join(' / ') : 'Any nearby spot'}{a.deadline != null ? ` · Due ${fmt(a.deadline)}` : ''}</div><div className="mt-1.5"><PriorityTag p={a.priority} /></div></div><ChevronRight size={18} /></button>;
+    <ActIcon id={a.id} size={46} /><div className="flex-1"><div className={`text-[16px] font-bold ${a.done ? 'line-through opacity-60' : ''}`}>{a.title}{a.done && ' · Done'}</div><div className="text-sm text-[#4a4f58]">{a.duration} min · {a.locations.length ? a.locations.join(' / ') : 'Any nearby spot'}{a.deadline != null ? ` · Due ${fmt(a.deadline)}` : ''}</div><div className="mt-1.5"><PriorityTag p={a.priority} /></div></div><ChevronRight size={18} /></button>;
 }
 export function BottomNav({ tab, set }: { tab: string; set: (t: string) => void }) {
   const t = [['today', 'Today', Sun], ['plan', 'Plan', CalendarDays], ['acts', 'Activities', ListTodo], ['settings', 'Settings', Cog]] as const;
@@ -213,12 +216,18 @@ export default function App() {
     {items.length === 0 && <p className="py-8 text-center text-[#4a4f58]">No commitments. The whole day is open.</p>}</div>; };
 
   const ad = st.acts.find(a => a.id === actDetail);
-  return <div className="flex min-h-screen items-center justify-center bg-[#e9e4d8] p-4 font-sans text-[#1b2433]">
-    <div className="relative h-[844px] w-[390px] overflow-hidden rounded-[48px] border-[10px] border-[#1b2433] bg-[#fbf8f1] shadow-xl">
+  return <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_20%_20%,#f3e3b5_0,transparent_40%),radial-gradient(circle_at_80%_80%,#cfe3d6_0,transparent_45%),#e9e4d8] p-4 font-sans text-[#1b2433]">
+    <div className="relative h-[844px] w-[390px] overflow-hidden rounded-[48px] border-[10px] border-[#1b2433] bg-[#fbf8f1] shadow-[0_40px_80px_-30px_rgba(27,36,51,.55)] ring-1 ring-black/20">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-[60] flex h-11 items-center justify-between px-7 pt-1 text-[13px] font-semibold"><span>{fmt(st.now).replace(/ (AM|PM)/, '')}</span><span className="h-7 w-28 rounded-full bg-[#1b2433]" /><span className="flex items-center gap-1"><Signal size={14} /><Wifi size={14} /><BatteryFull size={16} /></span></div>
+      <div className="pointer-events-none absolute bottom-2 left-1/2 z-[60] h-1.5 w-32 -translate-x-1/2 rounded-full bg-[#1b2433]/80" />
       {!st.onboarded ? <Onboarding done={(buf, imp) => { up({ onboarded: true, prefs: { ...st.prefs, buffer: buf } }); if (imp) flash('Calendar imported (demo data)'); }} /> : <>
         <div className="h-full overflow-y-auto px-4 pb-28 pt-12">
           {tab === 'today' && <>
-            <header className="mb-3 flex items-end justify-between"><div><h1 className="text-2xl font-extrabold">Today</h1><p className="text-sm text-[#4a4f58]">Make the space between count.</p></div><button className={`${btn} ${S} flex items-center gap-1 !px-3 text-sm`} onClick={() => setSheet({ k: 'com', day: 0 })}><Plus size={16} />Commitment</button></header>
+            <header className="relative mb-3 overflow-hidden rounded-3xl bg-gradient-to-br from-[#1f5c43] via-[#22684c] to-[#2b6b72] p-5 text-white">
+              <svg className="absolute -right-8 -top-8 opacity-20" width="180" height="180" viewBox="0 0 180 180"><circle cx="90" cy="90" r="80" fill="none" stroke="#f3d27a" strokeWidth="2" strokeDasharray="4 8" /><circle cx="90" cy="90" r="50" fill="none" stroke="#fff" strokeWidth="1.5" /><path d="M10 160 Q 90 100 170 150" stroke="#f3d27a" strokeWidth="2" fill="none" /></svg>
+              <div className="relative flex items-start justify-between"><div><div className="text-xs font-semibold uppercase tracking-widest text-[#f3d27a]">Gapwise · Uptown</div><h1 className="mt-1 text-[28px] font-extrabold leading-none">{st.now < 720 ? 'Good morning' : st.now < 1020 ? 'Good afternoon' : 'Good evening'}</h1><p className="mt-1 text-sm text-white/80">Make the space between count.</p></div>
+                <button className={`${btn} flex items-center gap-1 !px-3 text-sm bg-white/15 text-white hover:bg-white/25`} onClick={() => setSheet({ k: 'com', day: 0 })}><Plus size={16} />Add</button></div>
+              <div className="relative mt-4 grid grid-cols-3 gap-2 text-center">{[[`${gapsToday.reduce((n, g) => n + g.usable, 0)}`, 'usable min'], [`${gapsToday.length}`, 'gaps today'], [`${st.acts.filter(a => !a.done).length}`, 'to-dos open']].map(([v, l]) => <div key={l} className="rounded-2xl bg-white/10 py-2 backdrop-blur"><div className="text-xl font-extrabold">{v}</div><div className="text-[11px] text-white/75">{l}</div></div>)}</div></header>
             <div className="mb-3 rounded-2xl border border-[#d9d4c7] bg-white p-3"><div className="flex justify-between text-sm"><span className="flex items-center gap-1 font-semibold"><Clock size={14} />Simulated current time</span><b>{fmt(st.now)}</b></div><input aria-label="Simulated current time" type="range" min={480} max={1080} step={5} value={st.now} onChange={e => up({ now: Number(e.target.value) })} className="w-full accent-[#1f5c43]" /></div>
             {banner && <ChangeBanner text={banner} onClose={() => setBanner('')} />}
             {nowGap && <NowCard g={nowGap} st={st} now={st.now} onAdd={e => assign(nowGap, { kind: 'act', id: e.a.id, title: e.a.title })} onWhy={e => setWhy({ e, g: { ...nowGap, start: st.now, total: nowGap.end - st.now, usable: Math.max(0, nowGap.end - st.now - nowGap.travel - nowGap.buffer) } })} onKeep={() => assign(nowGap, { kind: 'open' })} />}

@@ -5,3 +5,5 @@ body { font-family: Inter, system-ui, sans-serif; }
 @keyframes gwu { from { transform: translateY(16px); opacity: 0 } to { transform: none; opacity: 1 } }
 .anim-fade { animation: gwf .2s ease-out }
 .anim-up { animation: gwu .22s ease-out }
+.h-full.overflow-y-auto { background-image: radial-gradient(#e8e1cf 1px, transparent 1px); background-size: 18px 18px; }
+input[type=range] { height: 28px; }
