@@ -1,1 +1,7 @@
 @import 'tailwindcss';
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+body { font-family: Inter, system-ui, sans-serif; }
+@keyframes gwf { from { opacity: 0 } to { opacity: 1 } }
+@keyframes gwu { from { transform: translateY(16px); opacity: 0 } to { transform: none; opacity: 1 } }
+.anim-fade { animation: gwf .2s ease-out }
+.anim-up { animation: gwu .22s ease-out }
