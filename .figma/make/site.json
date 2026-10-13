@@ -1,1 +1,10 @@
-{}
+{
+  "description": "Designed for Tulane University students, this app helps users maximize their time between commitments by suggesting realistic activities based on available gaps.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
