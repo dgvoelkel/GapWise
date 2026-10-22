@@ -33,6 +33,12 @@ export function gapsFor(cs: Commitment[], day: number, p: Prefs): Gap[] {
   }
   return out;
 }
+export function gapAtTime(gap: Gap, now: number): Gap {
+  if (now <= gap.start || now >= gap.end) return gap;
+  const total = gap.end - now;
+  const buffer = Math.min(gap.buffer, Math.max(0, total - gap.travel));
+  return { ...gap, start: now, total, buffer, usable: Math.max(0, total - gap.travel - buffer) };
+}
 const PW = { must: 30, should: 18, optional: 8 };
 export function evaluate(a: Activity, g: Gap, p: Prefs, from = g.prev.location, startAt = g.start): Eval {
   const locs = a.locations.length ? a.locations : [from];

@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { CalendarDays, ListTodo, Settings as Cog, Sun, Clock, MapPin, Footprints, ShieldCheck, ChevronRight, X, Plus, Check, AlertTriangle, CircleCheck, CircleSlash, Coffee, Info, ArrowDown, MoreHorizontal, Armchair, Navigation, Flag, Leaf, Circle, Printer, Utensils, BookOpen, Dumbbell, Sparkles, Wifi, Signal, BatteryFull } from 'lucide-react';
-import { type Activity, type Commitment, type Eval, type Fit, type Gap, type Prefs, type Priority, BASE_ACTS, LOC_NAMES, SCENARIOS, combos, dur, evaluate, fmt, gapsFor, rank, travel } from './gw/logic';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { CalendarDays, ListTodo, Settings as Cog, Sun, Clock, MapPin, Map as MapIcon, Footprints, ShieldCheck, ChevronRight, X, Plus, Check, AlertTriangle, CircleCheck, CircleSlash, Coffee, Info, ArrowDown, MoreHorizontal, Armchair, Navigation, Flag, Leaf, Circle, Printer, Utensils, BookOpen, Dumbbell, Sparkles } from 'lucide-react';
+import { type Activity, type Commitment, type Eval, type Fit, type Gap, type Prefs, type Priority, BASE_ACTS, LOC_NAMES, SCENARIOS, combos, dur, evaluate, fmt, gapAtTime, gapsFor, rank, travel } from './gw/logic';
+import CampusToday from './gw/CampusToday';
+import { Button, Heading } from './gw/ui';
 
 type Assign = { kind: 'act'; id: string; title: string } | { kind: 'open' } | { kind: 'skip' };
 type St = { onboarded: boolean; scenario: string; cs: Commitment[]; acts: Activity[]; prefs: Prefs; now: number; assign: Record<string, Assign> };
@@ -21,9 +23,28 @@ export function PriorityTag({ p }: { p: Priority }) {
   const I = m[1]; return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${m[2]}`}><I size={12} />{m[0]}</span>;
 }
 function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  return <div className="absolute inset-0 z-40 flex flex-col justify-end bg-black/30 anim-fade" onClick={onClose}>
-    <div className="max-h-[88%] overflow-y-auto rounded-t-3xl bg-[#fbf8f1] p-5 pb-8 anim-up" onClick={e => e.stopPropagation()}>
-      <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-bold">{title}</h2><button aria-label="Close" onClick={onClose} className="flex size-11 items-center justify-center rounded-full hover:bg-black/5"><X size={20} /></button></div>
+  const panel = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const el = panel.current;
+    const focusable = () => Array.from(el?.querySelectorAll<HTMLElement>('button:not([disabled]), input, select, textarea, [tabindex="0"]') ?? []).filter(node => node.getClientRects().length > 0);
+    (el?.querySelector<HTMLElement>('input, select, textarea') ?? focusable()[0] ?? el)?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); close.current(); }
+      if (event.key !== 'Tab') return;
+      const nodes = focusable();
+      const first = nodes[0], last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    el?.addEventListener('keydown', handleKey);
+    return () => { el?.removeEventListener('keydown', handleKey); if (previous?.isConnected) previous.focus(); };
+  }, []);
+  return <div className="gw-sheet-backdrop absolute inset-0 z-40 flex flex-col justify-end bg-black/30 anim-fade" onClick={onClose}>
+    <div ref={panel} tabIndex={-1} className="gw-sheet max-h-[88%] overflow-y-auto rounded-t-3xl bg-[#fbf8f1] p-5 pb-8 anim-up" role="dialog" aria-modal="true" aria-label={title} onClick={e => e.stopPropagation()}>
+      <div className="mb-4 flex items-center justify-between"><Heading as="h2" className="text-lg font-bold">{title}</Heading><Button size="icon" aria-label="Close" onClick={onClose} className="rounded-full hover:bg-black/5"><X size={20} /></Button></div>
       {children}</div></div>;
 }
 export function UsableTimeBreakdown({ g, big = true }: { g: Gap; big?: boolean }) {
@@ -112,8 +133,8 @@ function laterFits(a: Activity, st: St, excl: string) {
 }
 function GapDetail({ g, st, onClose, onAdd, onWhy, onKeep, onSkip, goGap }: { g: Gap; st: St; onClose: () => void; onAdd: (e: Eval) => void; onWhy: (e: Eval) => void; onKeep: () => void; onSkip: () => void; goGap: (g: Gap) => void }) {
   const { fits, no } = rank(st.acts, g, st.prefs); const [sel, setSel] = useState<Eval | undefined>(fits[0]); const cb = combos(fits, g, st.prefs);
-  return <div className="absolute inset-0 z-30 overflow-y-auto bg-[#fbf8f1] pb-10 anim-up">
-    <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-[#e6e1d4] bg-[#fbf8f1]/95 px-4 pb-3 pt-12 backdrop-blur"><button aria-label="Back" onClick={onClose} className="flex size-11 items-center justify-center rounded-full hover:bg-black/5"><X size={20} /></button>
+  return <div className="detail-panel absolute inset-0 z-30 overflow-y-auto bg-[#fbf8f1] pb-10 anim-up">
+    <div className="detail-panel-header sticky top-0 z-10 flex items-center gap-2 border-b border-[#e6e1d4] bg-[#fbf8f1]/95 px-4 pb-3 pt-12 backdrop-blur"><button aria-label="Back" onClick={onClose} className="flex size-11 items-center justify-center rounded-full hover:bg-black/5"><X size={20} /></button>
       <div><div className="text-[15px] font-bold">{fmt(g.start)} → {fmt(g.end)}</div><div className="text-sm text-[#4a4f58]">{g.prev.location} → {g.next.location}</div></div></div>
     <div className="space-y-5 p-4">
       <section className="relative overflow-hidden rounded-3xl border border-[#bcd3c4] bg-gradient-to-br from-[#eaf4ee] via-[#f6faf7] to-[#fdf6e3] p-4"><svg className="pointer-events-none absolute -right-6 -top-6 opacity-30" width="130" height="130" viewBox="0 0 130 130"><circle cx="65" cy="65" r="55" fill="none" stroke="#1f5c43" strokeWidth="2" strokeDasharray="3 7" /><circle cx="65" cy="65" r="30" fill="#d9a84a" opacity=".25" /></svg><div className="mb-1 inline-flex items-center gap-1 rounded-full bg-white/70 px-2 py-0.5 text-xs font-semibold text-[#1f5c43]"><Clock size={12} />How much time do I really have?</div><UsableTimeBreakdown g={g} /><div className="mt-1 mb-3 text-sm">Next: <b>{g.next.title}</b> at {fmt(g.next.start)}</div><GapBar g={g} e={sel} />{sel && <div className="mt-1 text-xs text-[#4a4f58]">Showing: {sel.a.title}. Tap an option to compare.</div>}</section>
@@ -176,8 +197,8 @@ export function ActivityCard({ a, onClick }: { a: Activity; onClick: () => void 
     <ActIcon id={a.id} size={46} /><div className="flex-1"><div className={`text-[16px] font-bold ${a.done ? 'line-through opacity-60' : ''}`}>{a.title}{a.done && ' · Done'}</div><div className="text-sm text-[#4a4f58]">{a.duration} min · {a.locations.length ? a.locations.join(' / ') : 'Any nearby spot'}{a.deadline != null ? ` · Due ${fmt(a.deadline)}` : ''}</div><div className="mt-1.5"><PriorityTag p={a.priority} /></div></div><ChevronRight size={18} /></button>;
 }
 export function BottomNav({ tab, set }: { tab: string; set: (t: string) => void }) {
-  const t = [['today', 'Today', Sun], ['plan', 'Plan', CalendarDays], ['acts', 'Activities', ListTodo], ['settings', 'Settings', Cog]] as const;
-  return <nav className="absolute inset-x-0 bottom-0 z-20 flex border-t border-[#e6e1d4] bg-[#fbf8f1] px-2 pb-6 pt-1">{t.map(([k, l, I]) => <button key={k} aria-current={tab === k} onClick={() => set(k)} className={`flex min-h-12 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-xs font-semibold ${tab === k ? 'text-[#1f5c43]' : 'text-[#6b7079]'}`}><span className={`rounded-full px-4 py-1 ${tab === k ? 'bg-[#e3efe8]' : ''}`}><I size={20} /></span>{l}</button>)}</nav>;
+  const t = [['today', 'Today', MapIcon], ['plan', 'Plan', CalendarDays], ['acts', 'Activities', ListTodo], ['settings', 'Settings', Cog]] as const;
+  return <nav className="app-navigation" aria-label="Main navigation">{t.map(([k, l, I]) => <Button key={k} aria-current={tab === k ? 'page' : undefined} onClick={() => set(k)} className={`app-nav-item ${tab === k ? 'is-active' : ''}`}><I size={17} strokeWidth={1.8} /><span>{l}</span>{tab === k && <i className="nav-active-dot" />}</Button>)}</nav>;
 }
 function Onboarding({ done }: { done: (buf: number, imp: boolean) => void }) {
   const [i, setI] = useState(0); const [buf, setBuf] = useState(5); const [imp, setImp] = useState(false); const [chips, setChips] = useState<string[]>(['Lunch', 'Study']);
@@ -196,7 +217,7 @@ function Onboarding({ done }: { done: (buf: number, imp: boolean) => void }) {
 }
 
 export default function App() {
-  const [st, setSt] = useState<St>(() => { try { const s = sessionStorage.getItem('gw'); if (s) return JSON.parse(s); } catch { /**/ } return { ...fresh(), onboarded: false }; });
+  const [st, setSt] = useState<St>(() => { try { const s = sessionStorage.getItem('gw'); if (s) return JSON.parse(s); } catch { /**/ } return fresh(); });
   useEffect(() => { sessionStorage.setItem('gw', JSON.stringify(st)); }, [st]);
   const [tab, setTab] = useState('today'); const [detail, setDetail] = useState<Gap | null>(null); const [why, setWhy] = useState<{ e: Eval; g: Gap } | null>(null);
   const [banner, setBanner] = useState(''); const [sheet, setSheet] = useState<null | { k: 'act'; a?: Activity } | { k: 'com'; c?: Commitment; day: number }>(null);
@@ -210,29 +231,23 @@ export default function App() {
   const changeCommit = (next: Commitment[], msg: (before: Gap[], after: Gap[]) => string) => { const s2 = { ...st, cs: next }; const b = allGaps(st), a = allGaps(s2); setSt(s2); setBanner(msg(b, a)); setSheet(null); setTab('today'); };
   const toggleCancel = (c: Commitment) => changeCommit(st.cs.map(x => x.id === c.id ? { ...x, canceled: !x.canceled } : x), (_b, a) => { const g = a.find(g => g.day === c.day && g.start <= c.start && g.end >= c.end); return c.canceled ? `${c.title} was restored. Gaps recalculated.` : `Your ${fmt(c.start)} ${c.title} was canceled.${g ? ` You now have ${dur(g.total)} available (${g.usable} min usable).` : ''}`; });
   const saveCommit = (c: Commitment) => changeCommit(st.cs.some(x => x.id === c.id) ? st.cs.map(x => x.id === c.id ? c : x) : [...st.cs, c], (b, a) => { const lost = st.acts.filter(x => !x.done && b.some(g => g.day === c.day && evaluate(x, g, st.prefs).fit !== 'none') && !a.some(g => g.day === c.day && evaluate(x, g, { ...st.prefs }).fit !== 'none')); return `${c.title} (${fmt(c.start)}–${fmt(c.end)}) is on your schedule.${lost.length ? ` ${lost.map(l => l.title).join(', ')} no longer fits ${DAYS[c.day].toLowerCase()}.` : ' Gaps recalculated.'}`; });
-  const nowGap = gapsToday.find(g => st.now >= g.start && st.now < g.end);
   const day = (d: number) => st.cs.filter(c => c.day === d).sort((a, b) => a.start - b.start);
 
   const Timeline = ({ d }: { d: number }) => { const gs = gapsFor(st.cs, d, st.prefs); const items = day(d); return <div>{items.map(c => { const g = gs.find(x => x.prev.id === c.id); return <div key={c.id}><CommitmentBlock c={c} onMenu={() => setSheet({ k: 'com', c, day: d })} />{g && <GapCard g={g} st={st} onDetail={() => setDetail(g)} onAdd={addE(g)} onWhy={e => setWhy({ e, g })} onKeep={() => assign(g, { kind: 'open' })} onUndo={() => assign(g, null)} onDone={id => { up({ acts: st.acts.map(a => a.id === id ? { ...a, done: true } : a) }); flash('Marked done'); }} />}</div>; })}
     {items.length === 0 && <p className="py-8 text-center text-[#4a4f58]">No commitments. The whole day is open.</p>}</div>; };
 
   const ad = st.acts.find(a => a.id === actDetail);
-  return <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_20%_20%,#f3e3b5_0,transparent_40%),radial-gradient(circle_at_80%_80%,#cfe3d6_0,transparent_45%),#e9e4d8] p-4 font-sans text-[#1b2433]">
-    <div className="relative h-[844px] w-[390px] overflow-hidden rounded-[48px] border-[10px] border-[#1b2433] bg-[#fbf8f1] shadow-[0_40px_80px_-30px_rgba(27,36,51,.55)] ring-1 ring-black/20">
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-[60] flex h-11 items-center justify-between px-7 pt-1 text-[13px] font-semibold"><span>{fmt(st.now).replace(/ (AM|PM)/, '')}</span><span className="h-7 w-28 rounded-full bg-[#1b2433]" /><span className="flex items-center gap-1"><Signal size={14} /><Wifi size={14} /><BatteryFull size={16} /></span></div>
-      <div className="pointer-events-none absolute bottom-2 left-1/2 z-[60] h-1.5 w-32 -translate-x-1/2 rounded-full bg-[#1b2433]/80" />
-      {!st.onboarded ? <Onboarding done={(buf, imp) => { up({ onboarded: true, prefs: { ...st.prefs, buffer: buf } }); if (imp) flash('Calendar imported (demo data)'); }} /> : <>
-        <div className="h-full overflow-y-auto px-4 pb-28 pt-12">
-          {tab === 'today' && <>
-            <header className="relative mb-3 overflow-hidden rounded-3xl bg-gradient-to-br from-[#1f5c43] via-[#22684c] to-[#2b6b72] p-5 text-white">
-              <svg className="absolute -right-8 -top-8 opacity-20" width="180" height="180" viewBox="0 0 180 180"><circle cx="90" cy="90" r="80" fill="none" stroke="#f3d27a" strokeWidth="2" strokeDasharray="4 8" /><circle cx="90" cy="90" r="50" fill="none" stroke="#fff" strokeWidth="1.5" /><path d="M10 160 Q 90 100 170 150" stroke="#f3d27a" strokeWidth="2" fill="none" /></svg>
-              <div className="relative flex items-start justify-between"><div><div className="text-xs font-semibold uppercase tracking-widest text-[#f3d27a]">Gapwise · Uptown</div><h1 className="mt-1 text-[28px] font-extrabold leading-none">{st.now < 720 ? 'Good morning' : st.now < 1020 ? 'Good afternoon' : 'Good evening'}</h1><p className="mt-1 text-sm text-white/80">Make the space between count.</p></div>
-                <button className={`${btn} flex items-center gap-1 !px-3 text-sm bg-white/15 text-white hover:bg-white/25`} onClick={() => setSheet({ k: 'com', day: 0 })}><Plus size={16} />Add</button></div>
-              <div className="relative mt-4 grid grid-cols-3 gap-2 text-center">{[[`${gapsToday.reduce((n, g) => n + g.usable, 0)}`, 'usable min'], [`${gapsToday.length}`, 'gaps today'], [`${st.acts.filter(a => !a.done).length}`, 'to-dos open']].map(([v, l]) => <div key={l} className="rounded-2xl bg-white/10 py-2 backdrop-blur"><div className="text-xl font-extrabold">{v}</div><div className="text-[11px] text-white/75">{l}</div></div>)}</div></header>
-            <div className="mb-3 rounded-2xl border border-[#d9d4c7] bg-white p-3"><div className="flex justify-between text-sm"><span className="flex items-center gap-1 font-semibold"><Clock size={14} />Simulated current time</span><b>{fmt(st.now)}</b></div><input aria-label="Simulated current time" type="range" min={480} max={1080} step={5} value={st.now} onChange={e => up({ now: Number(e.target.value) })} className="w-full accent-[#1f5c43]" /></div>
-            {banner && <ChangeBanner text={banner} onClose={() => setBanner('')} />}
-            {nowGap && <NowCard g={nowGap} st={st} now={st.now} onAdd={e => assign(nowGap, { kind: 'act', id: e.a.id, title: e.a.title })} onWhy={e => setWhy({ e, g: { ...nowGap, start: st.now, total: nowGap.end - st.now, usable: Math.max(0, nowGap.end - st.now - nowGap.travel - nowGap.buffer) } })} onKeep={() => assign(nowGap, { kind: 'open' })} />}
-            <Timeline d={0} /></>}
+  return <div className="gapwise-app">
+      {!st.onboarded ? <div className="onboarding-wrap"><Onboarding done={(buf, imp) => { up({ onboarded: true, prefs: { ...st.prefs, buffer: buf } }); if (imp) flash('Calendar imported (demo data)'); }} /></div> : <>
+        <header className="app-header">
+          <Button className="app-brand" aria-label="Gapwise home" onClick={() => { setTab('today'); setDetail(null); setActDetail(null); }}>
+            <span className="brand-symbol"><svg viewBox="0 0 32 32" width="27" height="27" aria-hidden="true"><path d="M8 5v14a8 8 0 0 0 16 0V5M8 11h16" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" /><path d="M13 6h6" className="brand-symbol-gap" strokeWidth="3.2" strokeLinecap="round" /></svg></span><span className="brand-wordmark">gapwise<span className="brand-period">.</span></span><span className="brand-tagline">Make the space<br />between count.</span>
+          </Button>
+          <BottomNav tab={tab} set={t => { setTab(t); setDetail(null); setActDetail(null); }} />
+          <div className="header-right"><span className="header-local-demo"><i />LOCAL DEMO</span><span className="header-personal-note">A little less rush.</span><span className="profile-mark" aria-label="Your local demo">Y</span></div>
+        </header>
+        <div className="app-body">
+          {tab === 'today' ? <CampusToday key={st.scenario} commitments={st.cs} gaps={gapsToday} activities={st.acts} prefs={st.prefs} now={st.now} assignments={st.assign} banner={banner ? <ChangeBanner text={banner} onClose={() => setBanner('')} /> : undefined} onTimeChange={now => up({ now })} onCommitment={c => setSheet({ k: 'com', c, day: c.day })} onAddCommitment={() => setSheet({ k: 'com', day: 0 })} onDetail={setDetail} onWhy={(g, e) => setWhy({ e, g })} onAssign={assign} onDone={id => { up({ acts: st.acts.map(a => a.id === id ? { ...a, done: true } : a) }); flash('Marked done'); }} /> : <div className="app-content anim-fade"><div className="content-page">
           {tab === 'plan' && <><h1 className="text-2xl font-extrabold">Plan</h1><p className="mb-3 text-sm text-[#4a4f58]">Optional. Assign something to a future gap or leave it unplanned.</p>
             <div className="mb-4 flex gap-2">{DAYS.map((d, i) => <button key={d} aria-pressed={planDay === i} onClick={() => setPlanDay(i)} className={`${btn} flex-1 !px-1 text-sm ${planDay === i ? P : S}`}>{d}</button>)}</div>
             <Timeline d={planDay} /><button className={`${btn} ${S} mt-3 w-full`} onClick={() => setSheet({ k: 'com', day: planDay })}>+ Add commitment on {DAYS[planDay]}</button></>}
@@ -247,10 +262,9 @@ export default function App() {
             <section className="rounded-2xl border border-[#d9a84a] bg-[#fdf6e3] p-4"><h2 className="mb-2 flex items-center gap-2 font-bold"><span className="flex size-8 items-center justify-center rounded-lg bg-white text-[#7a5a0c]"><Sparkles size={16} /></span>Demo scenario</h2><div className="space-y-2">{Object.entries(SCENARIOS).map(([k, v]) => <button key={k} aria-pressed={st.scenario === k} onClick={() => { setSt(fresh(k, st.prefs)); setBanner(''); setTab('today'); flash(`Loaded: ${v.label}`); }} className={`${btn} w-full text-left ${st.scenario === k ? P : S}`}>{v.label}</button>)}</div>
               <button className={`${btn} ${S} mt-3 w-full`} onClick={() => saveCommit({ id: 'm' + Date.now(), title: 'New meeting · Advisor', start: 900, end: 960, location: 'Richardson Memorial', day: 0, recurrence: [], type: 'meeting' })}>Simulate: new meeting added 3–4 PM</button>
               <button className={`${btn} ${S} mt-2 w-full`} onClick={() => { setSt({ ...fresh('default'), onboarded: false }); setBanner(''); setTab('today'); }}>Reset demo data</button></section></div>}
-        </div>
-        <BottomNav tab={tab} set={t => { setTab(t); setDetail(null); setActDetail(null); }} />
-        {detail && (() => { const g = allGaps(st).find(x => x.key === detail.key) ?? detail; return <GapDetail key={g.key + st.prefs.buffer} g={g} st={st} onClose={() => setDetail(null)} onAdd={addE(g)} onWhy={e => setWhy({ e, g })} onKeep={() => assign(g, { kind: 'open' })} onSkip={() => assign(g, { kind: 'skip' })} goGap={lg => { setDetail(null); setTab(lg.day === 0 ? 'today' : 'plan'); setPlanDay(lg.day); setTimeout(() => setDetail(lg), 50); }} />; })()}
-        {ad && <div className="absolute inset-0 z-30 overflow-y-auto bg-[#fbf8f1] px-4 pb-10 pt-12 anim-up"><button aria-label="Back" onClick={() => setActDetail(null)} className="flex size-11 items-center justify-center rounded-full hover:bg-black/5"><X size={20} /></button>
+        </div></div>}
+        {detail && (() => { const original = allGaps(st).find(x => x.key === detail.key) ?? detail; const g = original.day === 0 ? gapAtTime(original, st.now) : original; return <GapDetail key={g.key + st.prefs.buffer} g={g} st={st} onClose={() => setDetail(null)} onAdd={addE(g)} onWhy={e => setWhy({ e, g })} onKeep={() => assign(g, { kind: 'open' })} onSkip={() => assign(g, { kind: 'skip' })} goGap={lg => { setDetail(null); setTab(lg.day === 0 ? 'today' : 'plan'); setPlanDay(lg.day); setTimeout(() => setDetail(lg), 50); }} />; })()}
+        {ad && <div className="detail-panel activity-detail-panel absolute inset-0 z-30 overflow-y-auto bg-[#fbf8f1] px-4 pb-10 pt-12 anim-up"><button aria-label="Back" onClick={() => setActDetail(null)} className="flex size-11 items-center justify-center rounded-full hover:bg-black/5"><X size={20} /></button>
           <h1 className="text-2xl font-extrabold">{ad.title}</h1><div className="my-2"><PriorityTag p={ad.priority} /></div>
           <dl className="divide-y divide-[#e6e1d4] rounded-2xl border border-[#d9d4c7] bg-white px-4 text-[15px]">{([['Duration', `${ad.duration} min`], ['Deadline', ad.deadline != null ? fmt(ad.deadline) : 'None'], [ad.required ? 'Required window' : 'Preferred window', ad.preferred ? `${fmt(ad.preferred[0])}–${fmt(ad.preferred[1])}` : 'Any time'], ['Location', ad.locations.length ? ad.locations.join(' or ') : 'Any nearby spot / current location'], ['Availability', ad.required ? 'Only in window' : 'Open']] as const).map(([k, v]) => <div key={k} className="flex justify-between gap-3 py-2.5"><dt className="text-[#4a4f58]">{k}</dt><dd className="text-right font-semibold">{v}</dd></div>)}</dl>
           <h2 className="mb-2 mt-5 font-bold">Gaps where it fits</h2><div className="space-y-2">{allGaps(st).map(g => ({ g, e: evaluate(ad, g, st.prefs) })).filter(x => x.e.fit !== 'none').map(({ g, e }) => <button key={g.key} onClick={() => { setActDetail(null); setTab(g.day === 0 ? 'today' : 'plan'); setPlanDay(g.day); setDetail(g); }} className="flex w-full items-center justify-between rounded-xl border border-[#d9d4c7] bg-white p-3 text-left"><span><b>{DAYS[g.day]}, {fmt(g.start)}–{fmt(g.end)}</b><span className="block text-sm text-[#4a4f58]">Leaves {e.remaining} min</span></span><FitBadge fit={e.fit} /></button>)}
@@ -259,8 +273,9 @@ export default function App() {
         {why && <WhySheet e={why.e} g={why.g} onClose={() => setWhy(null)} onAdd={() => assign(why.g, { kind: 'act', id: why.e.a.id, title: why.e.a.title })} />}
         {sheet?.k === 'act' && <AddActivitySheet init={sheet.a} onClose={() => setSheet(null)} onSave={a => { up({ acts: st.acts.some(x => x.id === a.id) ? st.acts.map(x => x.id === a.id ? a : x) : [...st.acts, a] }); setSheet(null); flash('Saved — recommendations updated'); }} />}
         {sheet?.k === 'com' && <AddCommitmentSheet init={sheet.c} day={sheet.day} onClose={() => setSheet(null)} onSave={saveCommit} onCancel={sheet.c ? () => toggleCancel(sheet.c!) : undefined} />}
-        {toast && <div className="absolute inset-x-6 bottom-28 z-50 flex items-center gap-2 rounded-xl bg-[#1b2433] p-3 text-sm text-white anim-fade" role="status"><Check size={16} />{toast}</div>}
+        {toast && <div className="app-toast absolute inset-x-6 bottom-28 z-50 flex items-center gap-2 rounded-xl bg-[#1b2433] p-3 text-sm text-white anim-fade" role="status"><Check size={16} />{toast}</div>}
+        </div>
       </>}
-    </div></div>;
+    </div>;
 }
 void BASE_ACTS; void travel; void Coffee;
