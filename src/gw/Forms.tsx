@@ -551,7 +551,7 @@ export function CommitmentForm({
               ))}
             </div>
             <p className="small muted">
-              Adds occurrences within the seven days shown in Plan Ahead.
+              Adds occurrences within the seven days shown in Plan.
             </p>
           </fieldset>
         )}

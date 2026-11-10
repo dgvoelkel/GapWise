@@ -1,16 +1,9 @@
-import { useState } from "react"
-import {
-  ArrowRight,
-  CalendarDays,
-  List,
-  Map as MapIcon,
-  Plus,
-} from "lucide-react"
+import { ArrowRight, CalendarDays, Plus } from "lucide-react"
 import { type Gap, DATE_LABELS, fmt } from "./logic"
 import { type State } from "./state"
 import { EmptyState, TimeSummary } from "./components"
 import GapWorkspace, { type GapActions } from "./GapWorkspace"
-import MapPanel, { type Selection } from "./MapPanel"
+import { type Selection } from "./MapPanel"
 import { Button } from "./ui"
 
 type Props = {
@@ -18,8 +11,6 @@ type Props = {
   gap?: Gap
   selection: Selection
   actions: GapActions
-  onGap: (g: Gap) => void
-  onCommitment: (id: string) => void
   onPlan: () => void
   onAddCommitment: () => void
 }
@@ -28,12 +19,9 @@ export default function CampusToday({
   gap,
   selection,
   actions,
-  onGap,
-  onCommitment,
   onPlan,
   onAddCommitment,
 }: Props) {
-  const [view, setView] = useState<"list" | "map">("list")
   const current = state.cs.find(
     (c) =>
       c.day === 0 && !c.canceled && c.start <= state.now && c.end > state.now,
@@ -57,55 +45,24 @@ export default function CampusToday({
         </div>
         <Button variant="secondary" onClick={onPlan}>
           <CalendarDays size={16} />
-          Your day
+          Plan your day
         </Button>
       </header>
       {gap ? (
         <>
-          <TimeSummary g={gap} now={state.now} />
-          <div
-            className="mobile-view-toggle segmented"
-            aria-label="Recommendation view"
-          >
-            <Button
-              aria-pressed={view === "list"}
-              className={view === "list" ? "is-active" : ""}
-              onClick={() => setView("list")}
-            >
-              <List size={16} />
-              List
-            </Button>
-            <Button
-              aria-pressed={view === "map"}
-              className={view === "map" ? "is-active" : ""}
-              onClick={() => setView("map")}
-            >
-              <MapIcon size={16} />
-              Map
-            </Button>
-          </div>
-          <div className={`now-layout mobile-show-${view}`}>
-            <div className="now-recommendations">
-              <GapWorkspace
-                state={state}
-                gap={gap}
-                selectedId={selection.id}
-                selectedLocation={selection.location}
-                actions={actions}
-              />
-            </div>
-            <div className="now-map">
-              <MapPanel
-                state={state}
-                gap={gap}
-                selection={selection}
-                actions={actions}
-                onGap={onGap}
-                onCommitment={onCommitment}
-                onPlan={onPlan}
-              />
-            </div>
-          </div>
+          <section className="now-card" aria-label="Your next decision">
+            <TimeSummary g={gap} now={state.now} />
+            <GapWorkspace
+              key={gap.key}
+              state={state}
+              gap={gap}
+              selectedId={selection.id}
+              selectedLocation={selection.location}
+              actions={actions}
+              withMap
+              heading={upcoming ? "For your next gap" : "What fits right now"}
+            />
+          </section>
           {state.prefs.style === "ahead" && (
             <section className="plan-next-card">
               <CalendarDays size={21} />
@@ -114,14 +71,14 @@ export default function CampusToday({
                 <p>Explore the rest of today or make a plan for tomorrow.</p>
               </div>
               <Button variant="secondary" onClick={onPlan}>
-                Plan Ahead
+                Open Plan
                 <ArrowRight size={14} />
               </Button>
             </section>
           )}
         </>
       ) : (
-        <div className="now-layout">
+        <div className="now-empty">
           <EmptyState
             title={
               state.cs.filter((c) => c.day === 0 && !c.canceled).length < 2
@@ -136,22 +93,18 @@ export default function CampusToday({
             </p>
             <div className="button-row">
               <Button variant="primary" onClick={onPlan}>
-                Plan Ahead
+                Open Plan
               </Button>
               <Button variant="secondary" onClick={onAddCommitment}>
                 <Plus size={15} />
                 Add commitment
               </Button>
+              <Button onClick={() => actions.onMap()}>
+                Open full map
+                <ArrowRight size={14} />
+              </Button>
             </div>
           </EmptyState>
-          <MapPanel
-            state={state}
-            selection={selection}
-            actions={actions}
-            onGap={onGap}
-            onCommitment={onCommitment}
-            onPlan={onPlan}
-          />
         </div>
       )}
     </main>

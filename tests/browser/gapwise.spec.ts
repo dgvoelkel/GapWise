@@ -20,7 +20,7 @@ async function assignStudy(page: Page) {
     .click()
 }
 async function delayClass(page: Page) {
-  await nav(page, "Plan Ahead").click()
+  await nav(page, "Plan").click()
   await page
     .getByRole("button", { name: "Edit Machine Learning", exact: true })
     .click()
@@ -59,7 +59,7 @@ test("all five navigation sections work without academic commentary", async ({
   ).toHaveCount(1)
   await expect(page.locator(".time-summary")).toContainText("51")
   for (const [label, heading] of [
-    ["Plan Ahead", "Plan Ahead"],
+    ["Plan", "Plan"],
     ["Map", "Map"],
     ["Activities", "Things to make time for"],
     ["Settings", "Settings"],
@@ -113,7 +113,7 @@ test("immediate decision preserves activity through details, map, assignment, an
   expect(Object.values(saved.assign).some((a: any) => a.id === "print")).toBe(
     true,
   )
-  await nav(page, "Plan Ahead").click()
+  await nav(page, "Plan").click()
   await expect(page.locator(".calendar-gap.is-planned")).toContainText(
     "Print assignment",
   )
@@ -128,15 +128,24 @@ test("recommendation filters, dismissal, and restoration modify real results", a
 }) => {
   await page.getByRole("button", { name: "High priority", exact: true }).click()
   await expect(page.locator(".recommendation-card")).toHaveCount(2)
+  await expect(page.locator(".now-strip-pin")).toHaveCount(2)
   await page
     .getByRole("button", { name: "No extra detour", exact: true })
     .click()
   await expect(page.locator(".recommendation-card")).toHaveCount(1)
+  await expect(page.locator(".now-strip-pin")).toHaveCount(1)
+  await expect(page.locator(".now-strip-comparison")).toContainText(
+    "+0 min detour",
+  )
   await expect(card(page, "Email my advisor")).toBeVisible()
   await card(page, "Email my advisor")
     .getByRole("button", { name: "Dismiss Email my advisor", exact: true })
     .click()
   await expect(page.locator(".recommendation-card")).toHaveCount(0)
+  await expect(page.locator(".now-strip-pin")).toHaveCount(0)
+  await expect(page.locator(".now-strip-comparison")).toContainText(
+    "Direct to next commitment",
+  )
   expect(Object.values((await readState(page)).dismissed).flat()).toContain(
     "email",
   )
@@ -144,6 +153,7 @@ test("recommendation filters, dismissal, and restoration modify real results", a
     .getByRole("button", { name: /Restore dismissed activities/ })
     .click()
   await expect(card(page, "Email my advisor")).toBeVisible()
+  await expect(page.locator(".now-strip-pin")).toHaveCount(1)
   await page.getByRole("button", { name: "High priority", exact: true }).click()
   await page
     .getByRole("button", { name: "No extra detour", exact: true })
@@ -238,7 +248,7 @@ test("a map activity and future gap lead to the same calendar context", async ({
     .getByRole("button", { name: "Plan this gap", exact: true })
     .click()
   await expect(
-    page.getByRole("heading", { name: "Plan Ahead", exact: true }),
+    page.getByRole("heading", { name: "Plan", exact: true }),
   ).toBeVisible()
   await expect(
     page.getByRole("button", { name: /Tomorrow 15/ }),
@@ -261,12 +271,14 @@ test("kept-open time and skip decisions persist across views and reload", async 
     "This time is yours.",
   )
   await expect(page.locator(".recommendation-card")).toHaveCount(0)
-  await nav(page, "Plan Ahead").click()
+  await expect(page.locator(".now-strip-pin")).toHaveCount(0)
+  await nav(page, "Plan").click()
   await expect(page.locator(".calendar-gap.is-open")).toContainText("Kept open")
   await page.reload()
   await expect(page.locator(".assignment-card")).toContainText(
     "This time is yours.",
   )
+  await expect(page.locator(".now-strip-pin")).toHaveCount(0)
   await page.getByRole("button", { name: "Change choice", exact: true }).click()
   await page.getByRole("button", { name: "Skip for now", exact: true }).click()
   expect(Object.values((await readState(page)).assign)).toContainEqual({
@@ -284,7 +296,7 @@ test("kept-open time and skip decisions persist across views and reload", async 
 test("future calendar gaps can be assigned without filling other gaps", async ({
   page,
 }) => {
-  await nav(page, "Plan Ahead").click()
+  await nav(page, "Plan").click()
   await page.getByRole("button", { name: /Tomorrow 15/ }).click()
   await page.getByRole("button", { name: /^Select 12:15 PM gap/ }).click()
   await showAll(page)
@@ -299,7 +311,7 @@ test("future calendar gaps can be assigned without filling other gaps", async ({
   )
   await nav(page, "Activities").click()
   await expect(card(page, "Study for linear algebra")).toContainText("Planned")
-  await nav(page, "Plan Ahead").click()
+  await nav(page, "Plan").click()
   await expect(page.locator(".assignment-card")).toContainText(
     "Study for linear algebra",
   )
@@ -526,7 +538,7 @@ test("arrival buffer, pace, accessibility, energy, and planning style affect sav
 test("commitments validate overlap, support recurrence, cancel, and restore", async ({
   page,
 }) => {
-  await nav(page, "Plan Ahead").click()
+  await nav(page, "Plan").click()
   await page
     .getByRole("button", { name: "Add commitment", exact: true })
     .first()
@@ -589,6 +601,11 @@ test("activity combinations create two-member assignments and complete both", as
     .click()
   const assignment: any = Object.values((await readState(page)).assign)[0]
   expect(assignment.ids).toHaveLength(2)
+  await expect(page.locator(".now-strip-pin")).toHaveCount(2)
+  await expect(page.locator(".now-strip-route")).toHaveCount(3)
+  await expect(page.locator(".now-strip-heading")).toContainText(
+    "Your planned route",
+  )
   await page
     .getByRole("button", { name: "Mark both completed", exact: true })
     .click()
@@ -599,6 +616,7 @@ test("activity combinations create two-member assignments and complete both", as
     ),
   ).toBe(true)
   await expect(page.locator(".assignment-card")).toContainText("Completed")
+  await expect(page.locator(".now-strip-pin")).toHaveCount(0)
 })
 
 test("planning clock recalculates remaining time rather than changing a label only", async ({
@@ -661,23 +679,22 @@ test("state survives reload and completed activities are no longer recommended",
   ).toBe(true)
 })
 
-test("Right Now list and map preserve the same selected activity", async ({
+test("Right Now list and map strip preserve the same selected activity", async ({
   page,
 }) => {
-  const view = page.getByLabel("Recommendation view", { exact: true })
-  if (await view.isVisible())
-    await view.getByRole("button", { name: "Map", exact: true }).click()
-  await page.getByRole("button", { name: /^Preview Grab a coffee/ }).click()
-  await expect(page.locator(".map-selected-activity")).toContainText(
+  await showAll(page)
+  await card(page, "Grab a coffee")
+    .getByRole("button", { name: "Grab a coffee", exact: true })
+    .click()
+  const pin = page.getByRole("button", {
+    name: /^Suggestion \d+: Grab a coffee,/,
+  })
+  await expect(pin).toHaveAttribute("aria-pressed", "true")
+  await expect(page.locator(".now-strip-comparison")).toContainText(
     "Grab a coffee",
   )
-  if (await view.isVisible())
-    await view.getByRole("button", { name: "List", exact: true }).click()
-  await showAll(page)
   await expect(card(page, "Grab a coffee")).toHaveClass(/is-selected/)
-  await card(page, "Grab a coffee")
-    .getByRole("button", { name: "View on map", exact: true })
-    .click()
+  await page.getByRole("button", { name: "Open full map", exact: true }).click()
   await expect(
     page.getByRole("button", { name: /^Preview Grab a coffee/ }),
   ).toHaveAttribute("aria-pressed", "true")
@@ -709,7 +726,7 @@ test("an explicitly selected map location is used in the actual assignment", asy
     .click()
   const assignment: any = Object.values((await readState(page)).assign)[0]
   expect(assignment.locations.coffee).toBe("PJ's Coffee")
-  await nav(page, "Plan Ahead").click()
+  await nav(page, "Plan").click()
   await page
     .locator(".assignment-card")
     .getByRole("button", { name: "View details", exact: true })
@@ -814,12 +831,17 @@ test("initial setup saves real preferences and narrower layouts do not overflow"
     await page.setViewportSize({ width, height: 900 })
     for (const label of [
       "Right Now",
-      "Plan Ahead",
+      "Plan",
       "Map",
       "Activities",
       "Settings",
     ]) {
       await nav(page, label).click()
+      if (label === "Right Now" && width === 320)
+        await expect(page.locator(".now-card .next-event")).toHaveCSS(
+          "display",
+          "grid",
+        )
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,
@@ -873,4 +895,277 @@ test("an empty local schedule still offers a working map, activity details, and 
     .click()
   await expect(page.locator(".time-summary")).toContainText("51 min usable")
   expect((await readState(page)).cs.length).toBeGreaterThan(0)
+})
+
+test("home is a list-first Now card with a small map and matching numbered suggestions", async ({
+  page,
+}) => {
+  await expect(nav(page, "Right Now")).toHaveAttribute("aria-current", "page")
+  const home = page.getByRole("region", {
+    name: "Your next decision",
+    exact: true,
+  })
+  const strip = home.getByRole("region", {
+    name: "Suggestions along your route",
+    exact: true,
+  })
+  await expect(
+    home.getByRole("region", { name: "Available time" }),
+  ).toBeVisible()
+  await expect(strip).toBeVisible()
+  await expect(
+    page.getByLabel("Recommendation view", { exact: true }),
+  ).toHaveCount(0)
+  await expect(
+    page.getByRole("region", {
+      name: "Interactive Tulane campus map",
+      exact: true,
+    }),
+  ).toHaveCount(0)
+  await expect(
+    strip.getByRole("img", { name: "Your location: Gibson Hall" }),
+  ).toBeVisible()
+  await expect(
+    strip.getByRole("img", { name: "Next commitment: Newcomb Hall" }),
+  ).toBeVisible()
+  const suggestions = home.locator(".recommendation-card")
+  await expect(suggestions).toHaveCount(3)
+  await expect(strip.locator(".now-strip-pin")).toHaveCount(3)
+  for (let i = 0; i < 3; i++) {
+    const title = await suggestions.nth(i).getAttribute("aria-label")
+    const number = suggestions.nth(i).locator(".recommendation-number")
+    await expect(number).toHaveText(String(i + 1))
+    const pin = strip.getByRole("button", {
+      name: new RegExp(`^Suggestion ${i + 1}: ${title},`),
+    })
+    await expect(pin).toHaveText(String(i + 1))
+    const bounds = await pin.boundingBox()
+    expect(bounds!.width).toBeGreaterThanOrEqual(44)
+    expect(bounds!.height).toBeGreaterThanOrEqual(44)
+  }
+  const mapSize = await page.locator(".now-strip-canvas").boundingBox()
+  expect(mapSize!.height).toBeLessThanOrEqual(180)
+  const fontSizes = await home.evaluate((el) => ({
+    time: parseFloat(
+      getComputedStyle(el.querySelector(".time-summary h2 strong")!).fontSize,
+    ),
+    pin: parseFloat(
+      getComputedStyle(el.querySelector(".now-strip-pin")!).fontSize,
+    ),
+  }))
+  expect(fontSizes.time).toBeGreaterThan(fontSizes.pin * 3)
+  const positions = await strip
+    .locator(".now-strip-marker")
+    .evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect()
+        return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }
+      }),
+    )
+  for (let i = 0; i < positions.length; i++) {
+    for (let j = i + 1; j < positions.length; j++) {
+      const a = positions[i],
+        b = positions[j]
+      expect(
+        a.right <= b.left ||
+          b.right <= a.left ||
+          a.bottom <= b.top ||
+          b.bottom <= a.top,
+        "Map markers have separate touch targets",
+      ).toBe(true)
+    }
+  }
+})
+
+test("map-strip pins compare real detours and keep list, details, and full map connected", async ({
+  page,
+}) => {
+  const strip = page.locator(".now-map-strip")
+  await strip
+    .getByRole("button", { name: /^Suggestion 2: Email my advisor,/ })
+    .click()
+  await expect(card(page, "Email my advisor")).toHaveClass(/is-selected/)
+  await expect(page.locator(".now-strip-comparison")).toContainText(
+    "+0 min detour",
+  )
+  await card(page, "Print assignment")
+    .getByRole("button", { name: "Print assignment", exact: true })
+    .click()
+  await expect(
+    strip.getByRole("button", {
+      name: /^Suggestion 1: Print assignment,/,
+    }),
+  ).toHaveAttribute("aria-pressed", "true")
+  await expect(page.locator(".now-strip-comparison")).toContainText(
+    "13 min total walk",
+  )
+  await expect(page.locator(".now-strip-comparison")).toContainText(
+    "+4 min detour",
+  )
+  await expect(page.locator(".time-summary")).toContainText("51 min usable")
+  await card(page, "Print assignment")
+    .getByRole("button", { name: "View details", exact: true })
+    .click()
+  await expect(page.getByRole("dialog")).toContainText("35 min")
+  await page.keyboard.press("Escape")
+  await strip
+    .getByRole("button", { name: "Open full map", exact: true })
+    .click()
+  await expect(
+    page.getByRole("button", { name: /^Preview Print assignment/ }),
+  ).toHaveAttribute("aria-pressed", "true")
+  await expect(page.locator(".map-route-strip")).toContainText("+4 min")
+  await page
+    .getByRole("button", { name: "Return to Right Now", exact: true })
+    .click()
+  await expect(card(page, "Print assignment")).toHaveClass(/is-selected/)
+})
+
+test("the Plan calendar is an hourly full-day grid with time-aligned commitments and gaps", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Plan your day", exact: true }).click()
+  await expect(nav(page, "Plan")).toHaveAttribute("aria-current", "page")
+  const grid = page.locator(".calendar-day-grid")
+  await expect(grid).toHaveAttribute("data-start", "480")
+  await expect(grid).toHaveAttribute("data-end", "1200")
+  await expect(grid.locator(".day-grid-hour")).toHaveCount(13)
+  await expect(grid.locator(".calendar-event")).toHaveCount(4)
+  await expect(grid.locator(".calendar-gap")).toHaveCount(3)
+  const topology = await grid
+    .getByRole("button", { name: "Edit Topology", exact: true })
+    .evaluate((el) => ({
+      top: (el as HTMLElement).offsetTop,
+      height: el.getBoundingClientRect().height,
+    }))
+  const ml = await grid
+    .getByRole("button", { name: "Edit Machine Learning", exact: true })
+    .evaluate((el) => ({
+      top: (el as HTMLElement).offsetTop,
+      height: el.getBoundingClientRect().height,
+    }))
+  expect(ml.top - topology.top).toBe(56)
+  expect(ml.height).toBe(topology.height)
+  const gap = grid.getByRole("button", { name: /^Select 10:50 AM gap/ })
+  await expect(gap).toHaveAttribute("data-start", "650")
+  await expect(gap).toHaveAttribute("data-end", "720")
+  await expect(gap).toContainText("51 min usable")
+  await expect(gap).toHaveAttribute("aria-pressed", "true")
+  const gapLabelFits = await gap.evaluate((el) => {
+    const label = el.querySelector(".calendar-gap-content > small")!
+    return (
+      label.getBoundingClientRect().bottom <= el.getBoundingClientRect().bottom
+    )
+  })
+  expect(gapLabelFits, "The time range fits inside its calendar gap").toBe(true)
+  const short = grid.getByRole("button", { name: /^Select 9:50 AM gap/ })
+  expect((await short.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  await expect(grid.locator(".calendar-now-line")).toHaveAttribute(
+    "aria-label",
+    "Now, 10:50 AM",
+  )
+})
+
+test("Plan keeps the selected gap connected to its activities and offers a mobile return to the day", async ({
+  page,
+}) => {
+  await nav(page, "Plan").click()
+  await page.getByRole("button", { name: /^Select 1:15 PM gap/ }).click()
+  await expect(page.locator(".calendar-gap.is-selected")).toHaveAttribute(
+    "data-start",
+    "795",
+  )
+  await expect(
+    page.getByRole("region", { name: "Selected gap", exact: true }),
+  ).toContainText("After Research meeting")
+  await expect(page.locator(".planning-gap-panel")).toContainText(
+    "1:15 PM–4:00 PM",
+  )
+  const back = page.getByRole("button", { name: "Back to day", exact: true })
+  if (page.viewportSize()!.width < 850) {
+    await expect(page.locator(".planning-gap-panel")).toBeInViewport()
+    await back.click()
+    await expect(
+      page.getByRole("region", { name: "Today calendar", exact: true }),
+    ).toBeInViewport()
+  } else {
+    await expect(back).toBeHidden()
+  }
+})
+
+test("the day grid includes early and late commitments instead of cutting them off", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const s = JSON.parse(sessionStorage.getItem("gw")!)
+    s.cs.push(
+      {
+        ...s.cs[0],
+        id: "early",
+        title: "Early study group",
+        start: 420,
+        end: 450,
+      },
+      { ...s.cs[0], id: "late", title: "Evening club", start: 1260, end: 1350 },
+    )
+    sessionStorage.setItem("gw", JSON.stringify(s))
+  })
+  await page.reload()
+  await nav(page, "Plan").click()
+  const grid = page.locator(".calendar-day-grid")
+  await expect(grid).toHaveAttribute("data-start", "420")
+  await expect(grid).toHaveAttribute("data-end", "1380")
+  await expect(
+    grid.getByRole("button", { name: "Edit Early study group", exact: true }),
+  ).toBeVisible()
+  await expect(
+    grid.getByRole("button", { name: "Edit Evening club", exact: true }),
+  ).toBeVisible()
+  await expect(grid.locator(".day-grid-hour").last()).toContainText("11 PM")
+})
+
+test("exploring a later map gap continues in Plan without replacing the Right Now home gap", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Open full map", exact: true }).click()
+  const later = await page
+    .getByLabel("Map gap", { exact: true })
+    .locator("option")
+    .filter({ hasText: "Today · 1:15 PM" })
+    .getAttribute("value")
+  await page.getByLabel("Map gap", { exact: true }).selectOption(later!)
+  await page
+    .getByRole("button", { name: "Continue in Plan", exact: true })
+    .click()
+  await expect(nav(page, "Plan")).toHaveAttribute("aria-current", "page")
+  await expect(page.locator(".calendar-gap.is-selected")).toHaveAttribute(
+    "data-start",
+    "795",
+  )
+  await page.getByRole("button", { name: "GapWise home", exact: true }).click()
+  await expect(nav(page, "Right Now")).toHaveAttribute("aria-current", "page")
+  await expect(page.locator(".time-summary")).toContainText("51 min usable")
+  await expect(page.locator(".next-event")).toContainText("Research meeting")
+})
+
+test("an upcoming gap is labeled as a future start instead of a live student location", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: /^Planning clock,/ }).click()
+  await page
+    .getByRole("dialog")
+    .getByLabel("Time used for Right Now", { exact: true })
+    .fill("09:30")
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Done", exact: true })
+    .click()
+  await expect(page.locator(".page-heading")).toContainText(
+    "You’re in Topology.",
+  )
+  await expect(page.locator(".now-map-strip").getByRole("img", {
+      name: "Gap starts: Gibson Hall",
+      exact: true,
+    })).toBeVisible()
+  await expect(page.locator(".next-event")).toContainText("30 min away")
 })

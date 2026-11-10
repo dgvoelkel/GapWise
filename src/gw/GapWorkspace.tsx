@@ -27,6 +27,7 @@ import {
 } from "./state"
 import { EmptyState, FitBadge, RecommendationCard } from "./components"
 import { Button } from "./ui"
+import NowMapStrip from "./NowMapStrip"
 
 export type GapActions = {
   onSelect: (id: string, location?: string) => void
@@ -47,6 +48,7 @@ type Props = {
   selectedLocation?: string
   actions: GapActions
   heading?: string
+  withMap?: boolean
 }
 const FILTERS = [
   ["short", "Short tasks"],
@@ -177,6 +179,7 @@ export default function GapWorkspace({
   selectedLocation,
   actions,
   heading = "Recommended for this gap",
+  withMap = false,
 }: Props) {
   const [filters, setFilters] = useState<string[]>([])
   const [showAll, setShowAll] = useState(false)
@@ -204,6 +207,7 @@ export default function GapWorkspace({
   )
   const shown = showAll ? [...filtered] : filtered.slice(0, 3)
   const selected = filtered.find((e) => e.a.id === selectedId)
+  const activeId = withMap ? (selected?.a.id ?? filtered[0]?.a.id) : selectedId
   if (selected && !shown.some((e) => e.a.id === selectedId))
     shown.push(selected)
   const suggestions = combos(
@@ -212,23 +216,52 @@ export default function GapWorkspace({
     state.prefs,
   )
   const rest = available.find((a) => a.isRest)
-  if (assignment)
+  if (assignment) {
+    const sequence = assignedSequence(state, gap, assignment)
+    const planned =
+      assignment.kind === "act" && sequence.evaluations.some((e) => !e.a.done)
+        ? sequence
+        : undefined
     return (
-      <AssignmentCard
-        state={state}
-        gap={gap}
-        assignment={assignment}
-        actions={actions}
-      />
+      <div className="gap-workspace">
+        {withMap && (
+          <NowMapStrip
+            gap={gap}
+            evaluations={planned?.evaluations.filter((e) => !e.a.done) ?? []}
+            selectedId={selectedId}
+            sequence={planned}
+            upcoming={gap.day > 0 || state.now < gap.start}
+            onSelect={actions.onSelect}
+            onMap={actions.onMap}
+          />
+        )}
+        <AssignmentCard
+          state={state}
+          gap={gap}
+          assignment={assignment}
+          actions={actions}
+        />
+      </div>
     )
+  }
   if (gap.day === 0 && gap.end <= state.now)
     return (
       <EmptyState title="This gap has passed.">
-        <p>Select an upcoming gap in Plan Ahead.</p>
+        <p>Select an upcoming gap in Plan.</p>
       </EmptyState>
     )
   return (
     <div className="gap-workspace">
+      {withMap && (
+        <NowMapStrip
+          gap={gap}
+          evaluations={shown}
+          selectedId={activeId}
+          upcoming={gap.day > 0 || state.now < gap.start}
+          onSelect={actions.onSelect}
+          onMap={actions.onMap}
+        />
+      )}
       <div className="section-heading">
         <h2>{heading}</h2>
         <span className="muted small">
@@ -258,11 +291,12 @@ export default function GapWorkspace({
         ))}
       </div>
       <div className="recommendation-list">
-        {shown.map((e) => (
+        {shown.map((e, index) => (
           <RecommendationCard
             key={e.a.id}
             e={e}
-            selected={selectedId === e.a.id}
+            selected={activeId === e.a.id}
+            number={withMap ? index + 1 : undefined}
             onSelect={() =>
               actions.onSelect(
                 e.a.id,

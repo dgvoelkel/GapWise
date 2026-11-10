@@ -94,7 +94,7 @@ type HistoryEntry = {
 }
 const NAV = [
   ["today", "Right Now", Compass],
-  ["plan", "Plan Ahead", CalendarDays],
+  ["plan", "Plan", CalendarDays],
   ["map", "Map", MapIcon],
   ["acts", "Activities", ListTodo],
   ["settings", "Settings", SettingsIcon],
@@ -103,7 +103,6 @@ const NAV = [
 export default function App() {
   const [state, setState] = useState<State>(loadState)
   const [tab, setTab] = useState<Tab>("today")
-  const [rightKey, setRightKey] = useState<string>()
   const [planDay, setPlanDay] = useState(0)
   const [planKey, setPlanKey] = useState<string>()
   const [mapKey, setMapKey] = useState<string>()
@@ -146,9 +145,7 @@ export default function App() {
   const effective = (g: Gap) => (g.day === 0 ? gapAtTime(g, state.now) : g)
   const today = gaps.filter((g) => g.day === 0 && futureGap(g, state.now))
   const rightBase =
-    today.find((g) => g.key === rightKey) ??
-    today.find((g) => g.start <= state.now && g.end > state.now) ??
-    today[0]
+    today.find((g) => g.start <= state.now && g.end > state.now) ?? today[0]
   const rightGap = rightBase && effective(rightBase)
   const dayGaps = gaps.filter((g) => g.day === planDay)
   const planBase =
@@ -179,7 +176,6 @@ export default function App() {
   }
   const pickGap = (g: Gap) => {
     if (tab === "map") setMapKey(g.key)
-    else if (tab === "today") setRightKey(g.key)
     else {
       setPlanDay(g.day)
       setPlanKey(g.key)
@@ -449,13 +445,14 @@ export default function App() {
   const returnFromMap = () => {
     if (!mapReturn) return
     let nextTab = mapReturn.tab
-    if (mapGap) {
-      if (nextTab === "today" && mapGap.day === 0) setRightKey(mapGap.key)
-      else if (nextTab === "today" || nextTab === "plan") {
-        setPlanDay(mapGap.day)
-        setPlanKey(mapGap.key)
-        nextTab = "plan"
-      }
+    if (
+      mapGap &&
+      (nextTab === "plan" ||
+        (nextTab === "today" && mapGap.key !== rightBase?.key))
+    ) {
+      setPlanDay(mapGap.day)
+      setPlanKey(mapGap.key)
+      nextTab = "plan"
     }
     setTab(nextTab)
     if (mapReturn.detail && selection.id)
@@ -544,7 +541,6 @@ export default function App() {
       "Preferences saved. Walking, usable time, and activity fits updated.",
     )
   const changeTime = (now: number) => {
-    setRightKey(undefined)
     change({ ...state, now }, `Planning time updated to ${fmt(now)}.`)
   }
   const addCommitment = (day = planDay) => setModal({ kind: "commitment", day })
@@ -707,8 +703,6 @@ export default function App() {
                 gap={rightGap}
                 selection={selection}
                 actions={actions}
-                onGap={pickGap}
-                onCommitment={openCommitment}
                 onPlan={pageToPlan}
                 onAddCommitment={() => addCommitment(0)}
               />
@@ -744,7 +738,9 @@ export default function App() {
                   mapReturn?.detail
                     ? "Return to activity"
                     : mapReturn?.tab === "today"
-                      ? "Return to Right Now"
+                      ? mapGap?.key === rightGap?.key
+                        ? "Return to Right Now"
+                        : "Continue in Plan"
                       : "Return to gap"
                 }
               />
@@ -839,7 +835,6 @@ export default function App() {
             change(freshState(), "Local schedule reset.")
             setModal(null)
             setTab("today")
-            setRightKey(undefined)
             setSelection({ id: "print" })
           }}
         >
@@ -908,7 +903,7 @@ export default function App() {
                     setTab("plan")
                   }}
                 >
-                  Open Plan Ahead
+                  Open Plan
                 </Button>
               </EmptyState>
             )}

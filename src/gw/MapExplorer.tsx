@@ -84,8 +84,8 @@ export default function MapExplorer({
       </section>
       {!gap && (
         <p className="muted">
-          Select or add commitments in Plan Ahead to compare routes with an
-          available gap.
+          Select or add commitments in Plan to compare routes with an available
+          gap.
         </p>
       )}
       <MapPanel

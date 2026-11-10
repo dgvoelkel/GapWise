@@ -180,7 +180,12 @@ export function TimeSummary({
           {g.next.location}
         </span>
         <span>
-          {fmt(g.next.start)} · {Math.max(0, g.total)} min away
+          {fmt(g.next.start)} ·{" "}
+          {Math.max(
+            0,
+            now != null && g.day === 0 ? g.next.start - now : g.total,
+          )}{" "}
+          min away
         </span>
       </div>
     </section>
@@ -326,6 +331,7 @@ export function RouteSummary({ g, e }: RouteSummaryProps) {
 export function RecommendationCard({
   e,
   selected,
+  number,
   onSelect,
   onDetails,
   onAdd,
@@ -334,6 +340,7 @@ export function RecommendationCard({
 }: {
   e: Eval
   selected: boolean
+  number?: number
   onSelect: () => void
   onDetails: () => void
   onAdd: () => void
@@ -346,9 +353,24 @@ export function RecommendationCard({
       aria-label={e.a.title}
     >
       <div className="recommendation-top">
-        <ActIcon a={e.a} />
+        {number != null ? (
+          <Button
+            className="recommendation-number"
+            onClick={onSelect}
+            aria-label={`Select suggestion ${number}: ${e.a.title}`}
+            aria-pressed={selected}
+          >
+            {number}
+          </Button>
+        ) : (
+          <ActIcon a={e.a} />
+        )}
         <div className="recommendation-title">
-          <button className="text-button activity-title" onClick={onSelect}>
+          <button
+            className="text-button activity-title"
+            onClick={onSelect}
+            aria-pressed={selected}
+          >
             {e.a.title}
           </button>
           <span>
