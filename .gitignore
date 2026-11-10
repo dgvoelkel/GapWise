@@ -19,3 +19,7 @@ logs/
 # beside it.
 /.plugins/
 /.opencode-skills/
+
+# Browser verification output.
+test-results/
+playwright-report/

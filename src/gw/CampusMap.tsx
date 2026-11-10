@@ -24,10 +24,11 @@ import {
   Utensils,
   X,
 } from "lucide-react"
-import { type Commitment, type Eval, type Gap, fmt } from "./logic"
+import { type Commitment, type Eval, type Gap, categoryOf, fmt } from "./logic"
 import {
   CAMPUS_BUILDINGS,
   CAMPUS_LABELS,
+  CAMPUS_PLACES,
   CAMPUS_TREES,
   gapPoint,
   placePoint,
@@ -37,7 +38,7 @@ import {
 import { Button, Heading } from "./ui"
 import { layoutMarkers, type MapMarker, type MapRect } from "./map-layout"
 
-export type MapFilter = "all" | "study" | "food" | "move"
+export type MapFilter = "all" | "study" | "food" | "move" | "errand" | "rest"
 
 export const activityIcon = (id: string) =>
   ({
@@ -50,9 +51,7 @@ export const activityIcon = (id: string) =>
 
 export function matchesFilter(e: Eval, filter: MapFilter) {
   if (filter === "all") return true
-  if (filter === "study") return e.a.id === "print" || e.a.id === "study"
-  if (filter === "food") return e.a.id === "coffee" || e.a.id === "lunch"
-  return e.a.id === "workout"
+  return categoryOf(e.a) === filter
 }
 
 const CampusScenery = memo(function CampusScenery() {
@@ -269,7 +268,7 @@ const CampusScenery = memo(function CampusScenery() {
       {CAMPUS_LABELS.map((l) => (
         <text key={l.lines[0]} x={l.x} y={l.y} className="map-building-label">
           {l.lines.map((line, i) => (
-            <tspan key={line} x={l.x} dy={i ? 16 : 0}>
+            <tspan key={line} x={l.x} dy={i ? 30 : 0}>
               {line}
             </tspan>
           ))}
@@ -291,6 +290,10 @@ type Props = {
   onCommitment: (c: Commitment) => void
   onActivity: (e: Eval) => void
   onAgenda: () => void
+  onLocation?: (location: string) => void
+  selectedLocation?: string
+  routeEvaluations?: Eval[]
+  instanceId?: string
 }
 
 export default function CampusMap({
@@ -305,6 +308,10 @@ export default function CampusMap({
   onCommitment,
   onActivity,
   onAgenda,
+  onLocation,
+  selectedLocation,
+  routeEvaluations,
+  instanceId = "campus",
 }: Props) {
   const viewport = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ width: 1000, height: 800 })
@@ -377,7 +384,7 @@ export default function CampusMap({
   }, [])
 
   const compact = size.width < 640
-  const topInset = compact ? 104 : 0
+  const topInset = compact ? 114 : 105
   const scale =
     Math.max(
       0.2,
@@ -386,8 +393,7 @@ export default function CampusMap({
         (size.height - topInset) / (compact ? 900 : 960),
       ),
     ) * zoom
-  // Leave room for the floating inspector at intermediate screen widths.
-  const centerX = !compact && size.width < 1100 ? 500 : 608
+  const centerX = 608
   const view = {
     x: centerX + pan.x - size.width / scale / 2,
     y: 489 + pan.y - topInset / scale / 2 - size.height / scale / 2,
@@ -420,6 +426,22 @@ export default function CampusMap({
       event.currentTarget.releasePointerCapture(event.pointerId)
   }
   const shownActivities = fits.filter((e) => matchesFilter(e, filter))
+  const route = routeEvaluations?.length
+    ? routeEvaluations
+    : selected
+      ? [selected]
+      : []
+  const routeStops = activeGap
+    ? [
+        activeGap.prev.location,
+        ...route.map((e) => e.loc),
+        activeGap.next.location,
+      ]
+    : []
+  const routeD = routeStops
+    .slice(1)
+    .map((stop, i) => routePath(routeStops[i], stop))
+    .join(" ")
   const makeMarker = (
     id: string,
     anchor: Point,
@@ -480,6 +502,11 @@ export default function CampusMap({
       true,
     ),
   )
+  const locationMarkers = onLocation
+    ? Object.entries(CAMPUS_PLACES).map(([name, point]) =>
+        makeMarker(`place:${name}`, point, { x: 20, y: 22 }),
+      )
+    : []
   const markers = [
     ...commitmentMarkers,
     ...gapMarkers.filter((marker) => marker.id === `gap:${activeGap?.key}`),
@@ -490,6 +517,7 @@ export default function CampusMap({
     ...activityMarkers.filter(
       (marker) => marker.id !== `activity:${selected?.a.id}`,
     ),
+    ...locationMarkers,
   ]
   const placed = layoutMarkers(markers, size, geometry.obstacles)
   const walkingLabel = activeGap
@@ -508,8 +536,8 @@ export default function CampusMap({
         ref={viewport}
         className={`campus-viewport ${dragging ? "is-dragging" : ""}`}
         role="region"
-        aria-label="Interactive illustrated Tulane campus map"
-        aria-describedby="campus-map-instructions"
+        aria-label="Interactive Tulane campus map"
+        aria-describedby={`${instanceId}-instructions`}
         tabIndex={0}
         onPointerDown={(event) => {
           if (event.button !== 0 || (event.target as Element).closest("button"))
@@ -557,7 +585,7 @@ export default function CampusMap({
           }
         }}
       >
-        <span className="sr-only" id="campus-map-instructions">
+        <span className="sr-only" id={`${instanceId}-instructions`}>
           Drag to pan. Focus the map and use arrow keys to pan, plus and minus
           to zoom, or Home to recenter. Select a numbered commitment, a green
           usable-time gap, or a gold activity spot. Positions and routes are
@@ -581,27 +609,20 @@ export default function CampusMap({
               ))}
           {showRoutes && activeGap && (
             <>
-              <path
-                d={
-                  selected
-                    ? `${routePath(activeGap.prev.location, selected.loc)} ${routePath(selected.loc, activeGap.next.location)}`
-                    : routePath(
-                        activeGap.prev.location,
-                        activeGap.next.location,
-                      )
-                }
-                className="map-route-halo"
-              />
-              {selected ? (
+              <path d={routeD} className="map-route-halo" />
+              {route.length ? (
                 <>
-                  <path
-                    d={routePath(activeGap.prev.location, selected.loc)}
-                    className="map-route map-route--detour"
-                  />
-                  <path
-                    d={routePath(selected.loc, activeGap.next.location)}
-                    className="map-route map-route--next"
-                  />
+                  {routeStops.slice(1).map((stop, i) => (
+                    <path
+                      key={i}
+                      d={routePath(routeStops[i], stop)}
+                      className={`map-route ${
+                        i === routeStops.length - 2
+                          ? "map-route--next"
+                          : "map-route--detour"
+                      }`}
+                    />
+                  ))}
                 </>
               ) : (
                 <path
@@ -634,6 +655,27 @@ export default function CampusMap({
               )
             })}
         </svg>
+        {onLocation &&
+          Object.keys(CAMPUS_PLACES).map((name) => (
+            <div
+              key={name}
+              className="map-marker-position map-place-position"
+              style={screenPosition(placed[`place:${name}`])}
+            >
+              <Button
+                className={`map-place-pin ${
+                  selectedLocation === name ? "is-selected" : ""
+                }`}
+                aria-label={`Explore ${name}`}
+                aria-pressed={selectedLocation === name}
+                title={name}
+                data-map-marker={`place:${name}`}
+                onClick={() => onLocation(name)}
+              >
+                <MapPin size={15} />
+              </Button>
+            </div>
+          ))}
         {commitments
           .filter((c) => !c.canceled)
           .map((c) => {
@@ -737,8 +779,11 @@ export default function CampusMap({
           >
             <span className="map-walk-estimate">
               <Footprints size={12} />
-              {selected ? selected.t1 + selected.t2 : activeGap.travel} min
-              full-route walk
+              {route.length
+                ? route.reduce((sum, e) => sum + e.t1, 0) +
+                  route[route.length - 1].t2
+                : activeGap.travel}{" "}
+              min full-route walk
             </span>
           </div>
         )}
@@ -784,6 +829,8 @@ export default function CampusMap({
           ["study", "Study", BookOpen],
           ["food", "Food & coffee", Coffee],
           ["move", "Move", Dumbbell],
+          ["errand", "Errands", Printer],
+          ["rest", "Rest", Coffee],
         ] as const).map(([key, label, Icon]) => (
           <Button
             key={key}
@@ -799,7 +846,7 @@ export default function CampusMap({
       </div>
       {layersOpen && (
         <div className="map-layer-popover anim-fade">
-          <span className="eyebrow">MAKE IT YOUR MAP</span>
+          <span className="eyebrow">Map layers</span>
           <Button
             size="small"
             aria-pressed={showActivities}
@@ -870,7 +917,7 @@ export default function CampusMap({
         </span>
       </div>
       <div className="map-disclaimer">
-        Illustrated campus · estimated routes · no live location
+        Schematic campus · walking estimates, not live navigation
       </div>
     </>
   )
