@@ -1,5 +1,13 @@
 import { CalendarDays, Clock3, Leaf, MapPin } from "lucide-react"
-import { type Gap, DATE_LABELS, DAYS, fmt, gapsFor, gapAtTime } from "./logic"
+import {
+  type Gap,
+  DATE_LABELS,
+  DAYS,
+  fmt,
+  gapsFor,
+  gapAtTime,
+  placeLabel,
+} from "./logic"
 import { type State } from "./state"
 import { EmptyState } from "./components"
 import { Button } from "./ui"
@@ -95,13 +103,17 @@ export default function DayCalendar({
               key={c.id}
               className={`calendar-event ${
                 c.end - c.start < 60 ? "is-compact" : ""
-              }`}
+              } ${c.end - c.start < 20 ? "is-tiny" : ""}`}
               style={{
                 top: offset(c.start),
-                height: Math.max(44, offset(c.end) - offset(c.start) - 3),
+                // 5-minute stops (shuttles) get a 24 px row so they don't cover the next block.
+                height: Math.max(
+                  c.end - c.start < 20 ? 24 : 44,
+                  offset(c.end) - offset(c.start) - 3,
+                ),
               }}
               aria-label={`Edit ${c.title}`}
-              title={`${c.title} · ${fmt(c.start)}–${fmt(c.end)} · ${c.location}`}
+              title={`${c.title} · ${fmt(c.start)}–${fmt(c.end)} · ${placeLabel(c)}${c.source ? ` · ${c.source}` : ""}`}
               data-start={c.start}
               data-end={c.end}
               onClick={() => onCommitment(c.id)}
@@ -113,9 +125,14 @@ export default function DayCalendar({
                 </small>
                 <small className="calendar-event-location">
                   <MapPin size={11} />
-                  {c.location}
+                  {placeLabel(c)}
                 </small>
               </span>
+              {c.source && (
+                <small className="source-chip" aria-label={`From ${c.source}`}>
+                  {c.source}
+                </small>
+              )}
             </Button>
           ))}
         </div>

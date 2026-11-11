@@ -6,13 +6,23 @@ import path from 'node:path'
 import siteConfiguration from './.figma/make/site.json'
 
 
+/** Base URL for the built site: BASE_PATH (e.g. "/repo/") wins, then Figma's FIGMA_PUBLIC_URL, then "/". */
+function basePath(): string {
+  const explicit = process.env.BASE_PATH?.trim()
+  if (explicit) {
+    const withLeading = explicit.startsWith('/') ? explicit : `/${explicit}`
+    return withLeading.endsWith('/') ? withLeading : `${withLeading}/`
+  }
+  return process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : '/'
+}
+
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // .figma/make/deploy-preview passes `--mode development` for cached-preview builds.
   const emitSourcemaps = mode === 'development'
 
   return {
-    base: process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : '/',
+    base: basePath(),
     build: {
       sourcemap: emitSourcemaps ? 'inline' : false,
       minify: !emitSourcemaps,

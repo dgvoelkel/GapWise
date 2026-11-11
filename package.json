@@ -9,11 +9,12 @@
     "preview": "vite preview",
     "format": "oxfmt",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test tests/logic.test.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
     "lucide-react": "^1.56.0",
+    "maplibre-gl": "6.16.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

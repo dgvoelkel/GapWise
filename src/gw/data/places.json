@@ -1,0 +1,155 @@
+[
+  {
+    "name": "Gibson Hall",
+    "short": "Gibson",
+    "lat": 29.935403,
+    "lng": -90.122753,
+    "source": "Nominatim",
+    "verified": true,
+    "match": "Gibson Hall, 6823, Saint Charles Avenue, Black Pearl, Greenville, New Orleans, Orleans Parish, Louisiana, 70118, United States"
+  },
+  {
+    "name": "Dinwiddie Hall",
+    "short": "Dinwiddie",
+    "lat": 29.935005,
+    "lng": -90.122182,
+    "source": "Nominatim",
+    "verified": true,
+    "match": "Dinwiddie Hall, West Road, Black Pearl, Greenville, New Orleans, Orleans Parish, Louisiana, 70118, United States"
+  },
+  {
+    "name": "Newcomb Hall",
+    "short": "Newcomb",
+    "lat": 29.941705,
+    "lng": -90.122188,
+    "source": "Nominatim",
+    "verified": true,
+    "match": "Newcomb Hall, 1229, Broadway Street, Black Pearl, Greenville, New Orleans, Orleans Parish, Louisiana, 70118, United States"
+  },
+  {
+    "name": "LBC",
+    "short": "LBC",
+    "lat": 29.93971,
+    "lng": -90.120332,
+    "source": "Nominatim",
+    "verified": true,
+    "match": "Lavin-Bernick University Center (LBC), McAlister Place, Uptown Historic District, Greenville, New Orleans, Orleans Parish, Louisiana, 70118, United States"
+  },
+  {
+    "name": "The Commons",
+    "short": "Commons",
+    "lat": 29.940212,
+    "lng": -90.121035,
+    "source": "Davis",
+    "verified": true,
+    "match": "Malkin-Sacks Commons (dining); confirmed by Davis"
+  },
+  {
+    "name": "Howard-Tilton Library",
+    "short": "Library",
+    "lat": 29.939949,
+    "lng": -90.122148,
+    "source": "Nominatim",
+    "verified": true,
+    "match": "Howard Tilton Memorial Library, Freret Street, Uptown Historic District, Greenville, New Orleans, Orleans Parish, Louisiana, 70118, United States"
+  },
+  {
+    "name": "Reily Rec Center",
+    "short": "Reily",
+    "lat": 29.943537,
+    "lng": -90.116715,
+    "source": "Nominatim",
+    "verified": true,
+    "match": "Reily Student Recreation Center, Janet Yullman Way, Greenville, New Orleans, Orleans Parish, Louisiana, 70118, United States"
+  },
+  {
+    "name": "Richardson Memorial",
+    "short": "Richardson Mem.",
+    "lat": 29.935596,
+    "lng": -90.121815,
+    "source": "Nominatim",
+    "verified": true,
+    "match": "Richardson Memorial Hall, West Road, Black Pearl, Greenville, New Orleans, Orleans Parish, Louisiana, 70118, United States"
+  },
+  {
+    "name": "Stanley Thomas Hall",
+    "short": "Stanley Thomas",
+    "lat": 29.937069,
+    "lng": -90.121574,
+    "source": "Nominatim",
+    "verified": true,
+    "match": "Stanley Thomas Hall, Engineering Road, Black Pearl, Greenville, New Orleans, Orleans Parish, Louisiana, 70118, United States"
+  },
+  {
+    "name": "Goldring/Woldenberg",
+    "short": "Business School",
+    "lat": 29.939511,
+    "lng": -90.119495,
+    "source": "Nominatim",
+    "verified": true,
+    "match": "Goldring/Woldenberg Hall II, McAlister Place, Uptown Historic District, Greenville, New Orleans, Orleans Parish, Louisiana, 70118, United States"
+  },
+  {
+    "name": "Boggs Center",
+    "short": "Boggs",
+    "lat": 29.93776,
+    "lng": -90.12086,
+    "source": "Nominatim",
+    "verified": true,
+    "match": "Boggs Center for Energy and Biotechnology, Engineering Road, Black Pearl, Greenville, New Orleans, Orleans Parish, Louisiana, 70118, United States"
+  },
+  {
+    "name": "Tilton Memorial Hall",
+    "short": "Tilton Hall",
+    "lat": 29.935611,
+    "lng": -90.123451,
+    "source": "Nominatim",
+    "verified": true,
+    "match": "Tilton Memorial Hall, Law Road, Black Pearl, Greenville, New Orleans, Orleans Parish, Louisiana, 70118, United States"
+  },
+  {
+    "name": "Richardson Building",
+    "short": "Richardson Bldg",
+    "lat": 29.936288,
+    "lng": -90.121625,
+    "source": "Davis",
+    "verified": true,
+    "match": "Richardson Building, Engineering Road, Black Pearl, Greenville, New Orleans, Orleans Parish, Louisiana, 70118, United States; confirmed by Davis"
+  },
+  {
+    "name": "Wilson Center",
+    "short": "Wilson",
+    "lat": 29.94522,
+    "lng": -90.115714,
+    "source": "Nominatim",
+    "verified": true,
+    "match": "Wilson Athletic Center, 111, Ben Weiner Drive, Broadmoor, New Orleans, Orleans Parish, Louisiana, 70118, United States"
+  },
+  {
+    "name": "Goldring Tennis Center",
+    "short": "Tennis",
+    "lat": 29.94341,
+    "lng": -90.118158,
+    "source": "Davis",
+    "verified": true,
+    "match": "Tennis courts beside Reily / Brown Field (OSM way 1531679850); Davis chose these over the 200 Broadway center"
+  },
+  {
+    "name": "PJ's Coffee",
+    "short": "PJ's",
+    "lat": 29.938275,
+    "lng": -90.120957,
+    "source": "Davis",
+    "verified": true,
+    "match": "PJ's Coffee and Tea [osm node/583450123]; confirmed by Davis"
+  },
+  {
+    "name": "Shuttle stop",
+    "short": "Shuttle",
+    "lat": 29.9433,
+    "lng": -90.1162,
+    "source": "Davis",
+    "verified": true,
+    "match": "Ben Weiner Drive, out front of the Reily Center (per Davis)"
+  }
+]

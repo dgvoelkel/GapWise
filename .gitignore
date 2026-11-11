@@ -23,3 +23,6 @@ logs/
 # Browser verification output.
 test-results/
 playwright-report/
+
+# Build artifact from `make dist`
+gapwise-dist.zip

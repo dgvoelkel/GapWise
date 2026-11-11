@@ -1,4 +1,14 @@
+import placesJson from "./data/places.json" with { type: "json" }
+import walkingJson from "./data/walking.json" with { type: "json" }
+
 export type Priority = "must" | "should" | "optional"
+export type CommitmentSource =
+  | "Outlook"
+  | "Google"
+  | "Apple"
+  | "Canvas"
+  | "Teamworks"
+  | "Manual"
 export type Commitment = {
   id: string
   title: string
@@ -11,7 +21,14 @@ export type Commitment = {
   canceled?: boolean
   buffer?: number
   seriesId?: string
+  /** Display only: the room inside `location`. Walking uses the building. */
+  room?: string
+  /** Cosmetic: which calendar this came from. Nothing is ever connected. */
+  source?: CommitmentSource
 }
+/** "Goldring/Woldenberg 116" when a room is known, else the building. */
+export const placeLabel = (c: Pick<Commitment, "location" | "room">) =>
+  c.room ? `${c.location} ${c.room}` : c.location
 export type Category = "study" | "food" | "move" | "errand" | "rest"
 export type Energy = "low" | "medium" | "high"
 export type Activity = {
@@ -137,26 +154,29 @@ export const deadlineLabel = (a: Activity) =>
     ? "No deadline"
     : `${DAYS[a.deadlineDay ?? 0] ?? `Day ${(a.deadlineDay ?? 0) + 1}`} at ${fmt(a.deadline)}`
 
-export const LOCS: Record<string, [number, number]> = {
-  "Gibson Hall": [0, 0],
-  "Newcomb Hall": [8, 4],
-  LBC: [3, 3],
-  "Howard-Tilton Library": [5, -2],
-  "Reily Rec Center": [10, 9],
-  "Richardson Memorial": [-2, 5],
-  "Stanley Thomas Hall": [-3, 3],
-  "PJ's Coffee": [1, 4],
-  "Athletics facility": [14, 12],
+export type Place = {
+  name: string
+  short: string
+  lat: number
+  lng: number
+  source: string
+  verified: boolean
 }
-export const LOC_NAMES = Object.keys(LOCS)
+/** Real Tulane places (src/gw/data/places.json, built by `make geodata`). */
+export const PLACES: Place[] = placesJson as Place[]
+/** Walking minutes between places at a normal pace (src/gw/data/walking.json). */
+export const WALKING: Record<string, Record<string, number>> = walkingJson
+export const LOC_NAMES = PLACES.map((p) => p.name)
+export const placeByName = (name: string) =>
+  PLACES.find((p) => p.name === name)
 export function travel(a: string, b: string, p: Prefs) {
-  if (!a || !b || a === b || !LOCS[a] || !LOCS[b]) return 0
-  const [x1, y1] = LOCS[a],
-    [x2, y2] = LOCS[b]
+  if (!a || !b || a === b) return 0
+  const base = WALKING[a]?.[b]
+  if (base == null) return 0
   const m =
     { relaxed: 1.25, normal: 1, brisk: 0.85 }[p.pace] *
     (p.accessible ? 1.15 : 1)
-  return Math.max(2, Math.ceil(Math.hypot(x1 - x2, y1 - y2) * m))
+  return Math.max(2, Math.ceil(base * m))
 }
 export const fmt = (m: number) => {
   const h = Math.floor(m / 60),
@@ -521,7 +541,7 @@ export const DEFAULT_COMMITMENTS: Commitment[] = [
   ]),
   c("c3", "Research meeting", T(12), T(13, 15), "Newcomb Hall", 0, ["W"]),
   {
-    ...c("c4", "Practice", T(16), T(17, 30), "Athletics facility"),
+    ...c("c4", "Practice", T(16), T(17, 30), "Wilson Center"),
     type: "practice",
   },
   ...TOMORROW,

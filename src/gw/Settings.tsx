@@ -6,9 +6,11 @@ import {
   Leaf,
   RotateCcw,
   Settings2,
+  Users,
 } from "lucide-react"
 import { type Gap, type Prefs, fmt } from "./logic"
 import { type State } from "./state"
+import { PERSONAS } from "./personas"
 import { BufferSelector, Field, toMin, toStr } from "./Forms"
 import { Button } from "./ui"
 
@@ -19,6 +21,7 @@ export default function Settings({
   onTime,
   onSetup,
   onReset,
+  onSwitch,
 }: {
   state: State
   gap?: Gap
@@ -26,8 +29,10 @@ export default function Settings({
   onTime: (time: number) => void
   onSetup: () => void
   onReset: () => void
+  onSwitch: () => void
 }) {
   const p = state.prefs
+  const persona = state.persona ? PERSONAS[state.persona] : undefined
   return (
     <main className="workspace-page settings-page">
       <header className="page-heading">
@@ -177,26 +182,30 @@ export default function Settings({
               }}
             />
           </Field>
-          <dl className="property-list">
-            <div>
-              <dt>Calendar source</dt>
-              <dd>On this device</dd>
-            </div>
-            <div>
-              <dt>Calendar connection</dt>
-              <dd>Not connected</dd>
-            </div>
-          </dl>
+          <p className="schedule-source">
+            <Users size={16} />
+            <span>
+              Schedule:{" "}
+              {persona
+                ? `demo data for ${persona.name}`
+                : "your own entries"}{" "}
+              · Stored only in this browser tab.
+            </span>
+          </p>
           <p>
-            Changes are saved in this browser tab. Your calendar is not synced.
+            Nothing is sent anywhere, and nothing is kept after this tab closes.
           </p>
           <div className="button-row">
+            <Button variant="secondary" onClick={onSwitch}>
+              <Users size={14} />
+              Switch student
+            </Button>
             <Button variant="secondary" onClick={onSetup}>
-              Update initial setup
+              Update planning preferences
             </Button>
             <Button className="danger-text" onClick={onReset}>
               <RotateCcw size={14} />
-              Reset local schedule
+              Reset schedule
             </Button>
           </div>
         </section>

@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { ArrowUp, MapPin, Plus } from "lucide-react"
-import { type Gap, DATE_LABELS, DAYS, fmt, gapsFor } from "./logic"
+import { type Gap, DATE_LABELS, DAYS, fmt, gapsFor, placeLabel } from "./logic"
 import { type State } from "./state"
 import { EmptyState, TimeSummary } from "./components"
 import GapWorkspace, { type GapActions } from "./GapWorkspace"
@@ -112,10 +112,10 @@ export default function PlanAhead({
               </div>
               <div className="between-commitments">
                 <span>
-                  After <b>{gap.prev.title}</b> · {gap.prev.location}
+                  After <b>{gap.prev.title}</b> · {placeLabel(gap.prev)}
                 </span>
                 <span>
-                  Before <b>{gap.next.title}</b> · {gap.next.location}
+                  Before <b>{gap.next.title}</b> · {placeLabel(gap.next)}
                 </span>
               </div>
               {state.assign[gap.key]?.kind === "act" ? (

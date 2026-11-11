@@ -444,6 +444,7 @@ export function CommitmentForm({
       day,
       recurrence: [],
       type: "class",
+      source: "Manual",
     },
   )
   const [error, setError] = useState("")
@@ -499,16 +500,28 @@ export function CommitmentForm({
             />
           </Field>
         </div>
-        <Field label="Location">
-          <select
-            value={c.location}
-            onChange={(e) => setC({ ...c, location: e.target.value })}
-          >
-            {LOC_NAMES.map((l) => (
-              <option key={l}>{l}</option>
-            ))}
-          </select>
-        </Field>
+        <div className="form-row">
+          <Field label="Location">
+            <select
+              value={c.location}
+              onChange={(e) => setC({ ...c, location: e.target.value })}
+            >
+              {LOC_NAMES.map((l) => (
+                <option key={l}>{l}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Room (optional)" hint="Shown on the block. Walking uses the building.">
+            <input
+              maxLength={20}
+              value={c.room ?? ""}
+              placeholder="e.g. 116"
+              onChange={(e) =>
+                setC({ ...c, room: e.target.value.trim() || undefined })
+              }
+            />
+          </Field>
+        </div>
         <Field label="Arrival buffer">
           <select
             value={c.buffer ?? ""}

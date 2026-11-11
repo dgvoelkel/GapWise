@@ -1,17 +1,18 @@
 import { useRef, useState } from "react"
-import { ArrowRight, Footprints, MapPin } from "lucide-react"
+import { ArrowRight, Flag, Footprints, LocateFixed, MapPin } from "lucide-react"
 import {
   type Eval,
   type Gap,
+  LOC_NAMES,
   atLocation,
   categoryOf,
   deadlineLabel,
   evaluate,
-  gapsFor,
   rank,
 } from "./logic"
 import { type State, assignedSequence, availableActivities } from "./state"
-import CampusMap, { type MapFilter } from "./CampusMap"
+import CampusMapGL, { type MapPin as MapPinSpec, routeLegs } from "./map/CampusMapGL"
+import { MAP_FILTERS, type MapFilter, activityIcon, matchesFilter } from "./map/filters"
 import { FitBadge, PriorityTag } from "./components"
 import { type GapActions } from "./GapWorkspace"
 import { Button } from "./ui"
@@ -34,8 +35,6 @@ export default function MapPanel({
   gap,
   selection,
   actions,
-  onGap,
-  onCommitment,
   onPlan,
   full = false,
 }: {
@@ -75,18 +74,24 @@ export default function MapPanel({
   const activities = gap
     ? availableActivities(state, gap.key, true)
     : state.acts.filter((a) => !a.done)
-  const evaluations = gap
-    ? activities.map((a) => evaluate(a, gap, state.prefs))
-    : []
-  if (selected && !evaluations.some((e) => e.a.id === selected.a.id))
-    evaluations.push(selected)
-  else if (selected)
-    evaluations.splice(
-      evaluations.findIndex((e) => e.a.id === selected.a.id),
-      1,
-      selected,
+  // Numbered options: everything that fits, ranked, filtered by category.
+  const ranked = gap ? rank(activities, gap, state.prefs) : { fits: [], no: [] }
+  const options = ranked.fits
+    .map((e) =>
+      selected && e.a.id === selected.a.id ? selected : e,
     )
+    .filter((e) => matchesFilter(e, filter))
   const routeEvaluations = sequence?.evaluations ?? (selected ? [selected] : [])
+  const stops = routeEvaluations
+    .map((e) => e.loc)
+    .filter((loc, i, all) => i === 0 || loc !== all[i - 1])
+  const legs = gap
+    ? routeLegs(
+        gap.prev.location,
+        stops.filter((loc) => loc !== gap.prev.location || stops.length > 1),
+        gap.next.location,
+      )
+    : []
   const activePlace = selection.location ?? place ?? browsing?.locations[0]
   const placeActivities = activities.filter(
     (a) => filter === "all" || categoryOf(a) === filter,
@@ -106,6 +111,48 @@ export default function MapPanel({
     actions.onSelect(a?.id ?? "", location)
     reveal(".map-location-results")
   }
+  const pinnedPlaces = new Set([
+    gap?.prev.location,
+    gap?.next.location,
+    ...options.map((e) => e.loc),
+  ])
+  const pins: MapPinSpec[] = [
+    ...(gap
+      ? [
+          {
+            id: "start",
+            place: gap.prev.location,
+            kind: "start" as const,
+            label: `Start: ${gap.prev.title}, ${gap.prev.location}`,
+          },
+          {
+            id: "next",
+            place: gap.next.location,
+            kind: "next" as const,
+            label: `Next: ${gap.next.title}, ${gap.next.location}`,
+          },
+        ]
+      : []),
+    ...options.map((e, index) => {
+      const Icon = activityIcon(e.a)
+      return {
+        id: `option:${e.a.id}`,
+        place: e.loc,
+        kind: "option" as const,
+        number: index + 1,
+        selected: selected?.a.id === e.a.id,
+        icon: <Icon size={16} strokeWidth={1.9} aria-hidden="true" />,
+        label: `Option ${index + 1}: ${e.a.title} at ${e.loc}, ${e.t1 + e.t2} min walking`,
+      }
+    }),
+    ...LOC_NAMES.filter((name) => !pinnedPlaces.has(name)).map((name) => ({
+      id: `place:${name}`,
+      place: name,
+      kind: "place" as const,
+      selected: activePlace === name,
+      label: `Explore ${name}`,
+    })),
+  ]
   const walking =
     sequence?.walking ??
     (selected ? selected.t1 + selected.t2 : (gap?.travel ?? 0))
@@ -117,6 +164,10 @@ export default function MapPanel({
     activities.some((a) => a.id === selected.a.id) &&
     !!gap &&
     (gap.day > 0 || gap.end > state.now)
+  const chooseOption = (e: Eval) => {
+    setPlace(e.loc)
+    actions.onSelect(e.a.id, e.loc)
+  }
   return (
     <section
       ref={panel}
@@ -137,34 +188,67 @@ export default function MapPanel({
           </Button>
         </header>
       )}
+      <div className="map-filters" aria-label="Filter activity spots">
+        {MAP_FILTERS.map(([key, label, Icon]) => (
+          <Button
+            key={key}
+            size="small"
+            className={`map-filter ${filter === key ? "is-active" : ""}`}
+            aria-pressed={filter === key}
+            onClick={() => {
+              setFilter(key)
+              if (key !== "all" && selected && categoryOf(selected.a) !== key)
+                actions.onSelect("", activePlace)
+            }}
+          >
+            <Icon size={14} />
+            {label}
+          </Button>
+        ))}
+      </div>
       <div className="map-canvas">
-        <CampusMap
-          commitments={state.cs
-            .filter((c) => c.day === (gap?.day ?? 0))
-            .sort((a, b) => a.start - b.start)}
-          gaps={gapsFor(state.cs, gap?.day ?? 0, state.prefs)}
-          activeGap={gap}
-          fits={evaluations}
-          selected={selected}
-          routeEvaluations={routeEvaluations}
-          filter={filter}
-          setFilter={(next) => {
-            setFilter(next)
-            if (next !== "all" && selected && categoryOf(selected.a) !== next)
-              actions.onSelect("", activePlace)
+        <CampusMapGL
+          interactive
+          fit={gap ? "content" : "campus"}
+          legs={legs}
+          pins={pins}
+          padding={full ? 72 : 56}
+          onPin={(pin) => {
+            if (pin.kind === "option") {
+              const e = options.find((o) => `option:${o.a.id}` === pin.id)
+              if (e) {
+                chooseOption(e)
+                reveal(".map-selected-activity")
+              }
+            } else if (pin.kind === "place") selectPlace(pin.place)
           }}
-          onGap={onGap}
-          onCommitment={(c) => onCommitment(c.id)}
-          onActivity={(e) => {
-            setPlace(e.loc)
-            actions.onSelect(e.a.id, e.loc)
-            reveal(".map-selected-activity")
-          }}
-          onAgenda={onPlan}
-          onLocation={selectPlace}
-          selectedLocation={activePlace}
-          instanceId={full ? "full-map" : "now-map"}
         />
+        <div className="map-legend" aria-hidden="true">
+          <span>
+            <i className="gw-pin gw-pin--start gw-pin--legend">
+              <LocateFixed size={10} />
+            </i>
+            Start
+          </span>
+          <span>
+            <i className="gw-pin gw-pin--next gw-pin--legend">
+              <Flag size={10} />
+            </i>
+            Next
+          </span>
+          <span>
+            <i className="gw-pin gw-pin--option gw-pin--legend">1</i>
+            Option
+          </span>
+          <span>
+            <i className="map-legend-line" />
+            Walk
+          </span>
+          <span>
+            <i className="map-legend-line is-detour" />
+            Detour
+          </span>
+        </div>
       </div>
       {gap && (
         <div className="map-route-strip" aria-live="polite">
@@ -176,6 +260,51 @@ export default function MapPanel({
           <span>
             <b>+{extra} min</b> detour
           </span>
+        </div>
+      )}
+      {gap && (
+        <div className="map-option-list" aria-label="Options on the map">
+          <div className="section-heading">
+            <h3>Options that fit</h3>
+            <span className="muted small">
+              {options.length} {options.length === 1 ? "activity" : "activities"}
+            </span>
+          </div>
+          {options.length ? (
+            <ol>
+              {options.map((e, index) => (
+                <li key={e.a.id}>
+                  <Button
+                    className={`map-option ${
+                      selected?.a.id === e.a.id ? "is-selected" : ""
+                    }`}
+                    aria-pressed={selected?.a.id === e.a.id}
+                    onClick={() => chooseOption(e)}
+                  >
+                    <span className="gw-pin gw-pin--option gw-pin--inline">
+                      {index + 1}
+                    </span>
+                    <span className="map-option-text">
+                      <b>{e.a.title}</b>
+                      <small>
+                        {e.loc} · {e.t1 + e.t2} min walk ·{" "}
+                        {e.extraTravel <= 1
+                          ? "on your way"
+                          : `+${e.extraTravel} min detour`}
+                      </small>
+                    </span>
+                    <FitBadge fit={e.fit} />
+                  </Button>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="muted small">
+              {filter === "all"
+                ? "Nothing on your list fits this gap. You can head straight to your next commitment."
+                : "No activities in this category fit this gap. Try another filter."}
+            </p>
+          )}
         </div>
       )}
       {activePlace && (
@@ -318,19 +447,17 @@ export default function MapPanel({
       )}
       {!selected && !browsing && !activePlace && (
         <p className="map-select-hint">
-          Select a building or activity marker to see what’s available.
+          Select a numbered option or a building pin to see what’s available
+          there.
         </p>
       )}
-      {filter !== "all" &&
-        gap &&
-        !rank(activities, gap, state.prefs).fits.some(
-          (e) => categoryOf(e.a) === filter,
-        ) && (
-          <p className="map-filter-note small muted">
-            No activities in this category fit this gap. Select a marker to
-            check another time.
-          </p>
-        )}
+      {!gap && (
+        <p className="map-select-hint">
+          <Button variant="secondary" size="small" onClick={onPlan}>
+            Choose a gap in Plan
+          </Button>
+        </p>
+      )}
     </section>
   )
 }

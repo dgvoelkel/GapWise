@@ -12,6 +12,7 @@ import {
   futureGap,
   gapAtTime,
 } from "./logic.ts"
+import { type PersonaId, PERSONAS, isPersonaId } from "./personas.ts"
 
 export type Assignment = {
   kind: "act"
@@ -27,8 +28,10 @@ export type Assignment = {
   remainingChoice?: "open" | "skip"
 } | { kind: "open" } | { kind: "skip" }
 export type State = {
-  version: 3
+  version: 4
   onboarded: boolean
+  /** Which demo student this schedule came from; undefined = started empty. */
+  persona?: PersonaId
   cs: Commitment[]
   acts: Activity[]
   prefs: Prefs
@@ -38,8 +41,9 @@ export type State = {
 }
 export const assignmentIds = (a: Assignment) =>
   a.kind === "act" ? (a.ids ?? [a.id]) : []
+/** The low-fi sample schedule; kept for the logic tests. */
 export const freshState = (): State => ({
-  version: 3,
+  version: 4,
   onboarded: true,
   cs: structuredClone(DEFAULT_COMMITMENTS),
   acts: structuredClone(BASE_ACTS),
@@ -48,22 +52,61 @@ export const freshState = (): State => ({
   assign: {},
   dismissed: {},
 })
+/** Nothing scheduled yet: the "Start with an empty schedule" path. */
+export const emptyState = (): State => ({
+  version: 4,
+  onboarded: false,
+  cs: [],
+  acts: [],
+  prefs: { ...DEFAULT_PREFS },
+  now: 600,
+  assign: {},
+  dismissed: {},
+})
+/** A demo student's schedule, clock and preferences, as if just imported. */
+export const personaState = (id: PersonaId): State => {
+  const persona = PERSONAS[id]
+  return {
+    version: 4,
+    onboarded: true,
+    persona: id,
+    cs: structuredClone(persona.commitments),
+    acts: structuredClone(persona.activities),
+    prefs: { ...DEFAULT_PREFS, ...persona.prefs },
+    now: persona.now,
+    assign: {},
+    dismissed: {},
+  }
+}
+/** The state a persona (or empty schedule) starts from, for reset and change detection. */
+export const startingState = (s: Pick<State, "persona">): State =>
+  s.persona && isPersonaId(s.persona) ? personaState(s.persona) : emptyState()
+/** True when the schedule, activities, choices or preferences differ from the persona's start. */
+export function hasChanges(s: State) {
+  const base = startingState(s)
+  return (
+    JSON.stringify([s.cs, s.acts, s.assign, s.prefs, s.now]) !==
+    JSON.stringify([base.cs, base.acts, base.assign, base.prefs, base.now])
+  )
+}
 export function loadState(): State {
   try {
     const raw = sessionStorage.getItem("gw")
-    if (!raw) return freshState()
+    if (!raw) return emptyState()
     const s = JSON.parse(raw)
-    if (!Array.isArray(s.cs) || !Array.isArray(s.acts)) return freshState()
+    if (!Array.isArray(s.cs) || !Array.isArray(s.acts)) return emptyState()
+    if (s.version !== 4) return emptyState()
     return {
-      ...freshState(),
+      ...emptyState(),
       ...s,
-      version: 3,
+      version: 4,
+      persona: isPersonaId(s.persona) ? s.persona : undefined,
       prefs: { ...DEFAULT_PREFS, ...s.prefs },
       dismissed: s.dismissed ?? {},
       assign: s.assign ?? {},
     }
   } catch {
-    return freshState()
+    return emptyState()
   }
 }
 export function availableActivities(

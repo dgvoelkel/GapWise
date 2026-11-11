@@ -22,6 +22,7 @@ import {
   allGaps,
   atLocation,
   commitmentError,
+  dur,
   evaluateSequence,
   fmt,
   futureGap,
@@ -33,10 +34,16 @@ import {
   assignmentIds,
   assignmentIssues,
   availableActivities,
-  freshState,
+  emptyState,
+  hasChanges,
   loadState,
+  personaState,
   reconcileSchedule,
+  startingState,
 } from "./gw/state"
+import { type PersonaId, PERSONAS, isPersonaId } from "./gw/personas"
+import PersonaPicker from "./gw/PersonaPicker"
+import HelpSheet from "./gw/HelpSheet"
 import CampusToday from "./gw/CampusToday"
 import PlanAhead from "./gw/PlanAhead"
 import MapExplorer from "./gw/MapExplorer"
@@ -90,7 +97,7 @@ type Modal = Detail | {
   id: string
   returnTo?: Detail
 } | {
-  kind: "setup" | "clock" | "reset"
+  kind: "setup" | "clock" | "reset" | "switch" | "picker" | "help"
 }
 type MapReturn = {
   tab: Tab
@@ -100,6 +107,34 @@ type HistoryEntry = {
   before: State
   label: string
 }
+const TABS: Tab[] = ["today", "plan", "map", "acts", "settings"]
+/**
+ * Deep links, read once on load (BUILD.md 4.3):
+ * ?persona=stella&t=11:00&tab=today|plan|map|acts|settings&day=0&gap=<key>&sheet=why:<activityId>
+ */
+function readDeepLink() {
+  const params = new URLSearchParams(window.location.search)
+  const persona = params.get("persona")
+  const t = params.get("t")
+  const time = t && /^\d{1,2}:\d{2}$/.test(t) ? toMin(t) : undefined
+  const tab = params.get("tab") as Tab | null
+  const day = Number(params.get("day"))
+  const sheet = params.get("sheet")
+  return {
+    persona: isPersonaId(persona) ? persona : undefined,
+    time: time != null && time >= 0 && time < 1440 ? time : undefined,
+    tab: tab && TABS.includes(tab) ? tab : undefined,
+    day: Number.isInteger(day) && day >= 0 && day < 7 ? day : undefined,
+    gap: params.get("gap") ?? undefined,
+    why: sheet?.startsWith("why:") ? sheet.slice(4) : undefined,
+  }
+}
+const LINK = readDeepLink()
+function initialState(): State {
+  if (!LINK.persona) return loadState()
+  const s = personaState(LINK.persona)
+  return LINK.time != null ? { ...s, now: LINK.time } : s
+}
 const NAV = [
   ["today", "Right Now", Compass],
   ["plan", "Plan", CalendarDays],
@@ -108,22 +143,44 @@ const NAV = [
   ["settings", "Settings", SettingsIcon],
 ] as const
 
+function currentGap(s: State) {
+  const gaps = allGaps(s.cs, s.prefs).filter(
+    (g) => g.day === 0 && futureGap(g, s.now),
+  )
+  return gaps.find((g) => g.start <= s.now && g.end > s.now) ?? gaps[0]
+}
+/** The first recommendation for the current gap, or the planned activity there. */
+function initialSelection(s: State): Selection {
+  const current = currentGap(s)
+  if (!current) return { id: "" }
+  const choice = s.assign[current.key]
+  if (choice) return { id: assignmentIds(choice)[0] ?? "" }
+  const first = rank(
+    availableActivities(s, current.key),
+    gapAtTime(current, s.now),
+    s.prefs,
+  ).fits[0]
+  return { id: first?.a.id ?? "" }
+}
+
 export default function App() {
-  const [state, setState] = useState<State>(loadState)
-  const [tab, setTab] = useState<Tab>("today")
-  const [planDay, setPlanDay] = useState(0)
-  const [planKey, setPlanKey] = useState<string>()
-  const [mapKey, setMapKey] = useState<string>()
+  const [state, setState] = useState<State>(initialState)
+  const [tab, setTab] = useState<Tab>(LINK.tab ?? "today")
+  const [planDay, setPlanDay] = useState(LINK.day ?? 0)
+  const [planKey, setPlanKey] = useState<string | undefined>(LINK.gap)
+  const [mapKey, setMapKey] = useState<string | undefined>(LINK.gap)
   const [mapRemainingStart, setMapRemainingStart] = useState<number>()
-  const [selection, setSelection] = useState<Selection>(() => {
-    const current = allGaps(state.cs, state.prefs).find(
-      (g) => g.day === 0 && g.start <= state.now && g.end > state.now,
-    )
-    const choice = current && state.assign[current.key]
-    return { id: choice ? (assignmentIds(choice)[0] ?? "") : "print" }
-  })
+  const [selection, setSelection] = useState<Selection>(() =>
+    initialSelection(state),
+  )
   const [mapReturn, setMapReturn] = useState<MapReturn>()
-  const [modal, setModal] = useState<Modal | null>(null)
+  const [modal, setModal] = useState<Modal | null>(() => {
+    if (!LINK.why || !state.acts.some((a) => a.id === LINK.why)) return null
+    const current = currentGap(state)
+    return { kind: "details", id: LINK.why, gapKey: current?.key }
+  })
+  // After choosing a student (or an empty schedule), the buffer step still runs.
+  const [pendingSetup, setPendingSetup] = useState(false)
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [notice, setNotice] = useState("")
   const [storageWarning, setStorageWarning] = useState(false)
@@ -450,14 +507,28 @@ export default function App() {
     const after = nextGaps.find((g) => g.key === before?.key)
     const beforeUsable = before && effective(before).usable
     const afterUsable = after && effective(after).usable
+    const changed = next.cs.find((c) => c.id === commitment.id)
+    // A canceled commitment merges its neighbours into one longer gap.
+    const merged =
+      changed?.canceled &&
+      nextGaps.find(
+        (g) =>
+          g.day === changed.day &&
+          g.start <= changed.start &&
+          g.end >= changed.end &&
+          futureGap(g, state.now),
+      )
+    const mergedNow = merged ? effective(merged) : undefined
     change(
       next,
       `Your schedule changed. ${
-        beforeUsable != null &&
-        afterUsable != null &&
-        beforeUsable !== afterUsable
-          ? `Available time changed from ${beforeUsable} to ${afterUsable} minutes before ${after!.next.title}.`
-          : `${commitment.title} updated. Available gaps have been recalculated.`
+        merged && mergedNow
+          ? `${commitment.title} is canceled, so your ${fmt(merged.start)}–${fmt(merged.end)} gap is now ${dur(merged.total)} long with ${mergedNow.usable} usable minutes before ${merged.next.title}.`
+          : beforeUsable != null &&
+              afterUsable != null &&
+              beforeUsable !== afterUsable
+            ? `Available time changed from ${beforeUsable} to ${afterUsable} minutes before ${after!.next.title}.`
+            : `${commitment.title} updated. Available gaps have been recalculated.`
       }`,
     )
     setModal(null)
@@ -662,6 +733,27 @@ export default function App() {
   const changeTime = (now: number) => {
     change({ ...state, now }, `Planning time updated to ${fmt(now)}.`)
   }
+  const startAs = (id: PersonaId | "empty", firstRun: boolean) => {
+    const next = id === "empty" ? emptyState() : personaState(id)
+    const label =
+      id === "empty"
+        ? "Starting with an empty schedule."
+        : `Now exploring as ${PERSONAS[id].name}.`
+    if (firstRun) {
+      setState({ ...next, onboarded: false })
+      setPendingSetup(true)
+    } else {
+      change(next, label)
+    }
+    setTab("today")
+    setPlanDay(0)
+    setPlanKey(undefined)
+    setMapKey(undefined)
+    setSelection(initialSelection(next))
+    setModal(null)
+  }
+  const openSwitch = () =>
+    setModal({ kind: hasChanges(state) ? "switch" : "picker" })
   const addCommitment = (day = planDay) => setModal({ kind: "commitment", day })
   const pageToPlan = () => {
     if (contextGap) exploreGap(contextGap)
@@ -673,7 +765,11 @@ export default function App() {
 
   return (
     <div className="gapwise-app">
-      <div className="app-shell" inert={!!modal || !state.onboarded}>
+      <div
+        className="app-shell"
+        inert={!!modal || !state.onboarded}
+        hidden={!state.onboarded && !pendingSetup}
+      >
         <header className="app-header">
           <Button
             className="app-brand"
@@ -712,17 +808,27 @@ export default function App() {
               </Button>
             ))}
           </nav>
-          <Button
-            className="header-clock"
-            onClick={() => setModal({ kind: "clock" })}
-            aria-label={`Planning clock, ${fmt(state.now)}`}
-          >
-            <Clock3 size={16} />
-            <span>
-              {fmt(state.now)}
-              <small>{DATE_LABELS[0]}</small>
-            </span>
-          </Button>
+          <div className="header-right">
+            <Button
+              className="header-clock"
+              onClick={() => setModal({ kind: "clock" })}
+              aria-label={`Planning clock, ${fmt(state.now)}`}
+            >
+              <Clock3 size={16} />
+              <span>
+                {fmt(state.now)}
+                <small>{DATE_LABELS[0]}</small>
+              </span>
+            </Button>
+            <Button
+              className="header-help"
+              aria-label="Help for this tab"
+              title="What is this tab for?"
+              onClick={() => setModal({ kind: "help" })}
+            >
+              ?
+            </Button>
+          </div>
         </header>
         <div className="app-body">
           <div className="page-scroll" ref={page}>
@@ -886,6 +992,7 @@ export default function App() {
                 onTime={changeTime}
                 onSetup={() => setModal({ kind: "setup" })}
                 onReset={() => setModal({ kind: "reset" })}
+                onSwitch={openSwitch}
               />
             )}
           </div>
@@ -953,25 +1060,67 @@ export default function App() {
       )}
       {modal?.kind === "reset" && (
         <Confirmation
-          title="Reset your local schedule?"
+          title="Reset this schedule?"
           confirm="Reset schedule"
           onClose={() => setModal(null)}
           onConfirm={() => {
-            change(freshState(), "Local schedule reset.")
+            const base = startingState(state)
+            change(
+              base,
+              state.persona
+                ? `Schedule reset to ${PERSONAS[state.persona].name}’s demo data.`
+                : "Schedule reset.",
+            )
             setModal(null)
             setTab("today")
-            setSelection({ id: "print" })
+            setSelection(initialSelection(base))
           }}
         >
-          This replaces activities, commitments, and preferences in this tab
-          with the starting schedule. You can undo this change.
+          This puts the activities, commitments, choices, and preferences in
+          this tab back to where{" "}
+          {state.persona ? PERSONAS[state.persona].short : "you"} started. You
+          can undo this change.
         </Confirmation>
       )}
-      {(modal?.kind === "setup" || !state.onboarded) && (
+      {modal?.kind === "help" && (
+        <HelpSheet
+          tab={tab}
+          persona={state.persona ? PERSONAS[state.persona] : undefined}
+          onClose={() => setModal(null)}
+          onSwitch={() => setModal({ kind: "picker" })}
+        />
+      )}
+      {modal?.kind === "switch" && (
+        <Confirmation
+          title="Switch student?"
+          confirm="Choose a student"
+          onClose={() => setModal(null)}
+          onConfirm={() => setModal({ kind: "picker" })}
+        >
+          You have changed this schedule. Switching replaces it with another
+          student’s demo data. You can undo the switch.
+        </Confirmation>
+      )}
+      {modal?.kind === "picker" && (
+        <PersonaPicker
+          current={state.persona}
+          onClose={() => setModal(null)}
+          onChoose={(id) => startAs(id, false)}
+          onEmpty={() => startAs("empty", false)}
+        />
+      )}
+      {!state.onboarded && !pendingSetup && (
+        <PersonaPicker
+          onChoose={(id) => startAs(id, true)}
+          onEmpty={() => startAs("empty", true)}
+        />
+      )}
+      {(modal?.kind === "setup" || (!state.onboarded && pendingSetup)) && (
         <SetupForm
           prefs={state.prefs}
           onClose={() => {
             setModal(null)
+            setPendingSetup(false)
             if (!state.onboarded) setState({ ...state, onboarded: true })
           }}
           onSave={(prefs) => {
@@ -979,6 +1128,7 @@ export default function App() {
               { ...state, prefs, onboarded: true },
               "Planning preferences saved.",
             )
+            setPendingSetup(false)
             setModal(null)
           }}
         />

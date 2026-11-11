@@ -35,7 +35,12 @@ import {
 } from "../src/gw/plan-time.ts"
 
 const p = { ...DEFAULT_PREFS }
+// Walking minutes come from src/gw/data/walking.json, so expectations are
+// derived from travel() rather than hard-coded (BUILD.md Phase 3).
+const w = (a: string, b: string, prefs = p) => travel(a, b, prefs)
 const current = () => gapsFor(DEFAULT_COMMITMENTS, 0, p)[1]
+// Day-1 study example: Gibson Hall → Stanley Thomas Hall direct walk.
+const walk = () => w("Gibson Hall", "Stanley Thomas Hall")
 const task = (patch: Partial<Activity> = {}): Activity => ({
   id: "test",
   title: "Task",
@@ -74,7 +79,7 @@ test("coherent schedule has short, current, and long future gaps without overlap
     gaps.map((g) => g.total),
     [10, 70, 165],
   )
-  assert.equal(current().usable, 51)
+  assert.equal(current().usable, 70 - w("Gibson Hall", "Newcomb Hall") - 10)
   DEFAULT_COMMITMENTS.forEach((c) =>
     assert.equal(commitmentError(c, DEFAULT_COMMITMENTS), ""),
   )
@@ -83,7 +88,7 @@ test("full buffer is never shrunk to make a short gap fit", () => {
   const g = gapsFor(
     [
       block({ id: "a", start: 590, end: 600 }),
-      block({ id: "b", start: 605, end: 620, location: "Athletics facility" }),
+      block({ id: "b", start: 605, end: 620, location: "Wilson Center" }),
     ],
     0,
     p,
@@ -97,7 +102,8 @@ test("remaining current time preserves walking and the full buffer", () => {
   assert.equal(g.start, 700)
   assert.equal(g.total, 20)
   assert.equal(g.buffer, 10)
-  assert.equal(g.usable, 1)
+  assert.equal(g.travel, current().travel)
+  assert.equal(g.usable, Math.max(0, 20 - g.travel - 10))
   assert.equal(gapAtTime(current(), 719).buffer, 10)
 })
 test("fit boundaries are exactly 10, 0–9, and negative minutes", () => {
@@ -149,7 +155,7 @@ test("an activity at the starting location adds no detour", () => {
 test("multi-location activities choose a feasible full route, not merely a nearby stop", () => {
   const a = task({
     flexibleLocation: false,
-    locations: ["Athletics facility", "LBC"],
+    locations: ["Wilson Center", "LBC"],
   })
   assert.equal(evaluate(a, current(), p).loc, "LBC")
 })
@@ -207,7 +213,7 @@ test("priority and upcoming deadlines affect recommendation ranking", () => {
 })
 test("walking pace and accessibility allowance affect estimates", () => {
   const a = "Gibson Hall",
-    b = "Athletics facility"
+    b = "Wilson Center"
   assert.ok(travel(a, b, { ...p, pace: "relaxed" }) > travel(a, b, p))
   assert.ok(travel(a, b, { ...p, pace: "brisk" }) < travel(a, b, p))
   assert.ok(travel(a, b, { ...p, accessible: true }) > travel(a, b, p))
@@ -229,7 +235,7 @@ test("energy and avoiding long routes have meaningful scoring effects", () => {
   )
   const far = task({
     flexibleLocation: false,
-    locations: ["Athletics facility"],
+    locations: ["Wilson Center"],
   })
   assert.ok(
     evaluate(far, current(), { ...p, avoidLong: true }).score <
@@ -341,7 +347,11 @@ test("delays keep assignments visible and identify newly infeasible activities",
   )
   assert.equal(changed.assign[g.key].kind, "act")
   assert.equal(assignmentIssues(changed).length, 1)
-  assert.match(assignmentIssues(changed)[0].reason, /24 more minutes/)
+  const shortfall = 5 + 40 + w("Gibson Hall", "Newcomb Hall") + 10 - 40
+  assert.match(
+    assignmentIssues(changed)[0].reason,
+    new RegExp(`${shortfall} more minutes`),
+  )
 })
 test("valid assignments survive edits, even in other gaps", () => {
   const s = freshState(),
@@ -477,22 +487,22 @@ const assertPartition = (s: ReturnType<typeof freshState>, g: Gap) => {
   assert.equal(cursor, timeline.gap.end)
 }
 
-test("the study example partitions 135 minutes into 45 planned, 75 free, 5 walking, and 10 buffer", () => {
+test("the study example partitions 135 minutes into 45 planned, free time, the walk, and 10 buffer", () => {
   const { s, g } = studyPlan()
   const timeline = gapTimeline(s, g)
   assert.equal(g.start, 735)
   assert.equal(g.end, 870)
-  assert.equal(g.usable, 120)
+  assert.equal(g.usable, 125 - walk())
   assert.equal(timeline.planned, 45)
-  assert.equal(timeline.available, 75)
-  assert.equal(timeline.walking, 5)
+  assert.equal(timeline.available, 80 - walk())
+  assert.equal(timeline.walking, walk())
   assert.equal(timeline.buffer, 10)
   assert.deepEqual(
     timeline.parts.map((p) => [p.kind, p.start, p.end]),
     [
       ["activity", 735, 780],
-      ["available", 780, 855],
-      ["walking", 855, 860],
+      ["available", 780, 860 - walk()],
+      ["walking", 860 - walk(), 860],
       ["buffer", 860, 870],
     ],
   )
@@ -507,8 +517,8 @@ test("removing the only activity restores the original usable time", () => {
   delete assign[g.key]
   const timeline = gapTimeline({ ...s, assign }, g)
   assert.equal(timeline.planned, 0)
-  assert.equal(timeline.available, 120)
-  assert.equal(timeline.walking + timeline.buffer, 15)
+  assert.equal(timeline.available, 125 - walk())
+  assert.equal(timeline.walking + timeline.buffer, walk() + 10)
   assertPartition({ ...s, assign }, g)
 })
 
@@ -519,7 +529,7 @@ test("adding another activity uses only remaining time and retains the study sta
   assert.deepEqual(assignmentIds(next.assign[g.key]), ["study", "email"])
   assert.equal(timeline.sequence!.evaluations[0].finish, 780)
   assert.equal(timeline.sequence!.evaluations[1].finish, 788)
-  assert.equal(timeline.available, 67)
+  assert.equal(timeline.available, 72 - walk())
   assert.equal(timeline.planned, 53)
   assertPartition(next, g)
 })
@@ -528,10 +538,12 @@ test("additional detours reserve the complete route, not the original direct wal
   const { s, g } = studyPlan()
   const next = withAppend(s, g, ["coffee"], "PJ's Coffee")
   const timeline = gapTimeline(next, g)
+  const viaCoffee =
+    w("Gibson Hall", "PJ's Coffee") + w("PJ's Coffee", "Stanley Thomas Hall")
   assert.equal(timeline.planned, 55)
-  assert.equal(timeline.walking, 10)
-  assert.equal(timeline.available, 60)
-  assert.equal(timeline.sequence!.extraTravel, 5)
+  assert.equal(timeline.walking, viaCoffee)
+  assert.equal(timeline.available, 70 - viaCoffee)
+  assert.equal(timeline.sequence!.extraTravel, viaCoffee - walk())
   assert.equal(timeline.sequence!.remaining, timeline.available)
   assertPartition(next, g)
 })
@@ -589,8 +601,8 @@ test("removing one activity frees its time without pulling later departures forw
 test("activity duration and setup edits change occupied and remaining minutes", () => {
   const { s, g } = studyPlan()
   for (const [duration, setup, planned, available] of [
-    [60, 5, 65, 55],
-    [10, 2, 12, 108],
+    [60, 5, 65, 60 - walk()],
+    [10, 2, 12, 113 - walk()],
   ]) {
     const next = {
       ...s,
@@ -608,11 +620,13 @@ test("activity duration and setup edits change occupied and remaining minutes", 
 test("pace and buffer changes recalculate reserved and available calendar time", () => {
   const { s, g } = studyPlan()
   const moreBuffer = { ...s, prefs: { ...s.prefs, buffer: 20 } }
-  assert.equal(gapTimeline(moreBuffer, g).available, 65)
+  assert.equal(gapTimeline(moreBuffer, g).available, 70 - walk())
   assert.equal(gapTimeline(moreBuffer, g).buffer, 20)
   const relaxed = { ...s, prefs: { ...s.prefs, pace: "relaxed" as const } }
-  assert.equal(gapTimeline(relaxed, g).walking, 6)
-  assert.equal(gapTimeline(relaxed, g).available, 74)
+  const relaxedWalk = w("Gibson Hall", "Stanley Thomas Hall", relaxed.prefs)
+  assert.ok(relaxedWalk > walk())
+  assert.equal(gapTimeline(relaxed, g).walking, relaxedWalk)
+  assert.equal(gapTimeline(relaxed, g).available, 80 - relaxedWalk)
   assertPartition(moreBuffer, g)
   assertPartition(relaxed, g)
 })
@@ -620,8 +634,8 @@ test("pace and buffer changes recalculate reserved and available calendar time",
 test("commitment edits update the gap and retain infeasible plans without painting over reserved time", () => {
   const { s, g } = studyPlan()
   for (const [start, available, shortfall] of [
-    [810, 15, 0],
-    [780, 0, 15],
+    [810, 20 - walk(), 0],
+    [780, 0, walk() + 10],
   ]) {
     const next = reconcileSchedule(
       s,
@@ -656,7 +670,7 @@ test("required opening waits are distinct from setup and activity occupancy", ()
   assert.equal(timeline.parts.find((p) => p.phase === "setup")!.end, 740)
   assert.equal(timeline.parts.find((p) => p.phase === "activity")!.start, 780)
   assert.equal(timeline.waiting, 40)
-  assert.equal(timeline.available, 35)
+  assert.equal(timeline.available, 40 - walk())
   assertPartition(next, g)
 })
 
@@ -670,7 +684,7 @@ test("a later saved start leaves earlier time unassigned and can accept an activ
     startAt: 780,
   }
   const before = gapTimeline(s, g)
-  assert.equal(before.available, 75)
+  assert.equal(before.available, 80 - walk())
   assert.equal(before.windows.length, 2)
   const next = withAppend(
     s,
@@ -680,24 +694,28 @@ test("a later saved start leaves earlier time unassigned and can accept an activ
     before.windows[0].gap.start,
   )
   assert.equal(gapTimeline(next, g).sequence!.evaluations[1].finish, 825)
-  assert.equal(gapTimeline(next, g).available, 67)
+  assert.equal(gapTimeline(next, g).available, 72 - walk())
   assertPartition(next, g)
 })
 
 test("elapsed unplanned minutes are not offered again as the planning clock advances", () => {
   const s = freshState(),
     g = current()
+  // A 20-minute study block (5 setup + 20) ends at 675, leaving free time before departure.
+  s.acts = s.acts.map((a) => (a.id === "study" ? { ...a, duration: 20 } : a))
   s.assign[g.key] = {
     kind: "act",
     id: "study",
     title: "Study",
     startAt: g.start,
   }
-  s.now = 700
+  s.now = 690
   const timeline = gapTimeline(s, g)
-  assert.equal(timeline.available, 1)
-  assert.equal(timeline.parts.find((p) => p.kind === "elapsed")!.end, 700)
-  assert.equal(remainingWindow(s, g)!.gap.start, 700)
+  const departure = 720 - g.travel - 10
+  assert.ok(departure > 690)
+  assert.equal(timeline.available, departure - 690)
+  assert.equal(timeline.parts.find((p) => p.kind === "elapsed")!.end, 690)
+  assert.equal(remainingWindow(s, g)!.gap.start, 690)
   assert.ok("error" in appendToGap(s, remainingWindow(s, g)!.gap, ["email"]))
   assertPartition(s, g)
 })
@@ -715,7 +733,7 @@ test("remaining-time choices are preserved and never silently filled", () => {
   }
   assert.ok("error" in appendToGap(s, remainingWindow(s, g)!.gap, ["email"]))
   assert.deepEqual(assignmentIds(s.assign[g.key]), ["study"])
-  assert.equal(gapTimeline(s, g).available, 75)
+  assert.equal(gapTimeline(s, g).available, 80 - walk())
 })
 
 test("remaining-time scheduling rejects duplicate, completed, or already booked activities", () => {
@@ -738,7 +756,7 @@ test("a commitment-specific buffer remains reserved in the calendar", () => {
   const timeline = gapTimeline(next, g)
   assert.equal(timeline.planned, 45)
   assert.equal(timeline.buffer, 20)
-  assert.equal(timeline.available, 65)
+  assert.equal(timeline.available, 70 - walk())
   assert.equal(remainingWindow(next, g)!.gap.buffer, 20)
   assertPartition(next, g)
 })
@@ -752,9 +770,10 @@ test("scheduled activity details use their actual departure and respect the next
     "PJ's Coffee",
   )
   const emailGap = scheduledActivityGap(next, g, "email")
+  const toCoffee = w("Gibson Hall", "PJ's Coffee")
   assert.equal(emailGap.start, 780)
   assert.equal(emailGap.next.title, "Grab a coffee")
-  assert.equal(emailGap.end, 793)
+  assert.equal(emailGap.end, 788 + toCoffee)
   assert.equal(emailGap.buffer, 0)
   const email = evaluate(
     next.acts.find((a) => a.id === "email")!,
@@ -772,6 +791,9 @@ test("scheduled activity details use their actual departure and respect the next
     coffeeGap,
     next.prefs,
   )
-  assert.equal(coffee.finish, 803)
-  assert.equal(coffee.remaining, 52)
+  assert.equal(coffee.finish, 798 + toCoffee)
+  assert.equal(
+    coffee.remaining,
+    870 - coffee.finish - w("PJ's Coffee", "Stanley Thomas Hall") - 10,
+  )
 })

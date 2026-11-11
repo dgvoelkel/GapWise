@@ -19,10 +19,11 @@ import {
   type Priority,
   deadlineLabel,
   fmt,
+  placeLabel,
   priorityLabel,
 } from "./logic"
-import { CAMPUS_BUILDINGS, placePoint, routePath } from "./campus"
-import { activityIcon } from "./CampusMap"
+import { activityIcon } from "./map/filters"
+import CampusMapGL, { type MapPin as MapPinSpec, routeLegs } from "./map/CampusMapGL"
 import { Button } from "./ui"
 
 export function Sheet({
@@ -129,7 +130,7 @@ export function PriorityTag({ p }: { p: Priority }) {
   )
 }
 export function ActIcon({ a }: { a: Activity }) {
-  const Icon = a.isRest ? Leaf : activityIcon(a.id)
+  const Icon = activityIcon(a)
   return (
     <span className="activity-symbol">
       <Icon size={19} strokeWidth={1.7} />
@@ -177,7 +178,7 @@ export function TimeSummary({
         <strong>{g.next.title}</strong>
         <span>
           <MapPin size={14} />
-          {g.next.location}
+          {placeLabel(g.next)}
         </span>
         <span>
           {fmt(g.next.start)} ·{" "}
@@ -200,69 +201,37 @@ export function RoutePreview({
   e?: Eval
   onExpand: () => void
 }) {
-  const stops = [g.prev.location, ...(e ? [e.loc] : []), g.next.location]
-  const points = stops.map(placePoint)
-  const minX = Math.min(...points.map((p) => p.x)) - 110,
-    minY = Math.min(...points.map((p) => p.y)) - 90
-  const width = Math.max(240, Math.max(...points.map((p) => p.x)) - minX + 110)
-  const height = Math.max(220, Math.max(...points.map((p) => p.y)) - minY + 90)
+  const stops = e && e.loc !== g.prev.location ? [e.loc] : []
+  const legs = routeLegs(g.prev.location, stops, g.next.location)
+  const pins: MapPinSpec[] = [
+    {
+      id: "start",
+      place: g.prev.location,
+      kind: "start",
+      label: `Start: ${g.prev.location}`,
+    },
+    ...(e
+      ? [
+          {
+            id: e.a.id,
+            place: e.loc,
+            kind: "option" as const,
+            number: 1,
+            selected: true,
+            label: `${e.a.title} at ${e.loc}`,
+          },
+        ]
+      : []),
+    {
+      id: "next",
+      place: g.next.location,
+      kind: "next",
+      label: `Next: ${g.next.title}, ${g.next.location}`,
+    },
+  ]
   return (
     <div className="route-preview">
-      <svg
-        viewBox={`${minX} ${minY} ${width} ${height}`}
-        role="img"
-        aria-label={`Route: ${stops.join(" to ")}`}
-      >
-        {CAMPUS_BUILDINGS.map((b, i) => (
-          <rect
-            key={i}
-            x={b.x}
-            y={b.y}
-            width={b.w}
-            height={b.h}
-            fill="#e9e9e3"
-            stroke="#c5c9c2"
-          />
-        ))}
-        {stops.slice(1).map((stop, i) => (
-          <path
-            key={i}
-            d={routePath(stops[i], stop)}
-            fill="none"
-            stroke={i === 0 && e ? "#9a7a3e" : "#44736b"}
-            strokeWidth={5}
-            strokeDasharray={i === 0 && e ? "8 5" : undefined}
-          />
-        ))}
-        {points.map((p, i) => (
-          <g key={i}>
-            <circle
-              cx={p.x}
-              cy={p.y}
-              r={18}
-              fill={
-                i === 0
-                  ? "#253c33"
-                  : i === points.length - 1
-                    ? "#44736b"
-                    : "#9a7a3e"
-              }
-              stroke="white"
-              strokeWidth="3"
-            />
-            <text
-              x={p.x}
-              y={p.y + 6}
-              textAnchor="middle"
-              fontSize="18"
-              fontWeight="600"
-              fill="white"
-            >
-              {i === 0 ? "A" : i === points.length - 1 ? "B" : "1"}
-            </text>
-          </g>
-        ))}
-      </svg>
+      <CampusMapGL fit="content" legs={legs} pins={pins} onTap={onExpand} tapLabel="Expand map" />
       <Button variant="secondary" size="small" onClick={onExpand}>
         <MapPin size={14} />
         Expand map

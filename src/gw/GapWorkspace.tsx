@@ -277,7 +277,7 @@ export default function GapWorkspace({
     )
   return (
     <div className="gap-workspace">
-      {withMap && (
+      {withMap && shown.length > 0 && (
         <NowMapStrip
           gap={gap}
           evaluations={shown}
@@ -357,13 +357,15 @@ export default function GapWorkspace({
             title={
               filters.length
                 ? "No activities match these filters."
-                : "Nothing else fits in this gap."
+                : `Head to ${gap.next.location}.`
             }
           >
             <p>
               {filters.length
                 ? "Try fewer filters, or leave this time open."
-                : `You can head to ${gap.next.location} or take a break.`}
+                : `Nothing on your list fits in ${gap.usable} usable ${
+                    gap.usable === 1 ? "minute" : "minutes"
+                  }. You don’t have to fill every gap.`}
             </p>
             {filters.length > 0 && (
               <Button variant="secondary" onClick={() => setFilters([])}>
@@ -405,7 +407,7 @@ export default function GapWorkspace({
               size="small"
               onClick={() => actions.onAssign(gap, [rest.id])}
             >
-              Rest nearby
+              {rest.title}
             </Button>
           )}
         </div>
