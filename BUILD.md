@@ -298,11 +298,11 @@ Then write `docs/ACCESS.md`, a draft of report §3.3 for Davis to edit:
 ## Phase 9: Build and host
 
 1. `make build`, then `make preview`. Smoke-test all three personas by hand at 390 px.
-2. Hosting. **Preferred: Figma Make** through its GitHub integration.
-   - Throughout the build, **do not delete or modify** `.figma/`, `.figma/make/site.json`, or the Figma plugins in `vite.config.ts`. Make needs them. Phase 1's `BASE_PATH` change must keep `FIGMA_PUBLIC_URL` working.
-   - Davis connects the Make project to a GitHub repo, pushes this work to it, and pulls it into Make. Then he checks that Make's preview runs before publishing.
-   - After publishing, check that the published `figma.site` page loads the OpenFreeMap tiles (Phase 5). If the host blocks them, the map's fallback message should appear, and the app must still work.
-   - **Fallback** if Make can't pull the changes or won't publish them: Netlify Drop (`make dist`, drag the zip in), Vercel, or GitHub Pages (`BASE_PATH=/<repo>/`).
+2. Hosting: **Vercel (Hobby, free)**, connected to the GitHub repo. Figma Make's standard GitHub integration only pushes *to* GitHub; it can't pull these changes back in, so Make is not the host. **Never push from Figma Make to this repo**, because a push from Make overwrites everything in GitHub.
+   - Davis imports the repo at vercel.com → Add New → Project. Settings: Framework preset **Vite**, Build command **`pnpm build`**, Output directory **`dist`**, Install command **`pnpm install`**. Set environment variable **`NODE_VERSION=22`** only if the build log shows an older Node.
+   - Every `make push` to `main` then redeploys automatically.
+   - Keep `.figma/` and the Figma plugins in `vite.config.ts`. The build imports `.figma/make/site.json`, so deleting them breaks the build.
+   - **Fallback:** `make dist` and drag the zip into Netlify Drop.
 3. Open the deployed link in a private window on a phone-sized viewport. Confirm the persona picker, a deep link, and the map all work. Put the link in `docs/ACCESS.md`.
 
 ### 🛑 Checkpoint C

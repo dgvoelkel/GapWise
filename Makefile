@@ -40,16 +40,16 @@ check: typecheck test e2e ## Everything that must be green before a checkpoint
 sections-check: ## Verify docs/tulane-sections.csv is fully filled in (BUILD.md 4.0)
 	@awk -F',' 'NR>1 && NF>0 { for (i=5;i<=11;i++) if ($$i=="") { printf "row %d (%s %s): missing %s\n", NR, $$1, $$3, h[i]; bad=1 } } NR==1 { for (i=1;i<=NF;i++) h[i]=$$i } END { if (bad) exit 1; print "tulane-sections.csv complete" }' docs/tulane-sections.csv
 
-figma-check: ## Confirm the project is still importable by Figma Make, then build
+figma-check: ## Confirm the Figma config the build depends on is intact, then build
 	@test -f .figma/make/site.json || { echo "Missing .figma/make/site.json: restore it from the low-fi zip"; exit 1; }
 	@grep -q figmaSiteConfiguration vite.config.ts || { echo "Figma plugins were removed from vite.config.ts"; exit 1; }
 	@grep -q FIGMA_PUBLIC_URL vite.config.ts || { echo "vite.config.ts no longer reads FIGMA_PUBLIC_URL"; exit 1; }
 	$(PNPM) build
-	@echo "Figma-ready. Next: make push, then pull + publish inside Figma Make."
+	@echo "Build OK. Next: make push (Vercel redeploys from GitHub)."
 
-push: figma-check typecheck test ## Typecheck + unit tests, then commit and push to the repo connected to Figma Make (MSG="...")
+push: figma-check typecheck test ## Typecheck + unit tests, then commit and push to GitHub; Vercel redeploys (MSG="...")
 	@git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "Not a git repo. Run: git init && git remote add origin <repo-url>"; exit 1; }
-	@git remote get-url origin >/dev/null 2>&1 || { echo "No 'origin' remote. Add the repo connected to Figma Make: git remote add origin <url>"; exit 1; }
+	@git remote get-url origin >/dev/null 2>&1 || { echo "No 'origin' remote. Add your GitHub repo: git remote add origin <url>"; exit 1; }
 	git add -A
 	git commit -m "$(or $(MSG),GapWise hi-fi update)" || echo "Nothing new to commit"
 	git push -u origin HEAD
