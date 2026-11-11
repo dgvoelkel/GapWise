@@ -1,8 +1,9 @@
-import { CalendarDays, Check, Clock3, Leaf, MapPin } from "lucide-react"
+import { CalendarDays, Clock3, Leaf, MapPin } from "lucide-react"
 import { type Gap, DATE_LABELS, DAYS, fmt, gapsFor, gapAtTime } from "./logic"
-import { type State, assignmentIds } from "./state"
+import { type State } from "./state"
 import { EmptyState } from "./components"
 import { Button } from "./ui"
+import CalendarGap, { type GapFocus } from "./CalendarGap"
 
 const HOUR_HEIGHT = 56
 
@@ -13,6 +14,7 @@ export default function DayCalendar({
   onGap,
   onCommitment,
   onAdd,
+  onPart,
 }: {
   state: State
   day: number
@@ -20,6 +22,7 @@ export default function DayCalendar({
   onGap: (g: Gap) => void
   onCommitment: (id: string) => void
   onAdd: () => void
+  onPart?: (g: Gap, focus: GapFocus) => void
 }) {
   const commitments = state.cs
     .filter((c) => c.day === day)
@@ -41,6 +44,16 @@ export default function DayCalendar({
   )
   const offset = (time: number) => ((time - start) / 60) * HOUR_HEIGHT
   const showNow = day === 0 && state.now >= start && state.now < end
+  const select = (g: Gap, focus: GapFocus = { kind: "overview" }) => {
+    onGap(g)
+    onPart?.(g, focus)
+    if (window.innerWidth < 850)
+      requestAnimationFrame(() =>
+        document
+          .querySelector(".planning-gap-panel")
+          ?.scrollIntoView({ block: "start" }),
+      )
+  }
 
   return (
     <section className="calendar-panel" aria-label={`${DAYS[day]} calendar`}>
@@ -110,43 +123,35 @@ export default function DayCalendar({
           {gaps.map((raw) => {
             const g = raw.day === 0 ? gapAtTime(raw, state.now) : raw
             const assignment = state.assign[g.key]
-            const title =
-              assignment?.kind === "act"
-                ? assignmentIds(assignment)
-                    .map(
-                      (id) =>
-                        state.acts.find((a) => a.id === id)?.title ??
-                        "Activity",
-                    )
-                    .join(" + ")
-                : assignment?.kind === "open"
-                  ? "Kept open"
-                  : assignment?.kind === "skip"
-                    ? "Decide later"
-                    : "Free gap"
-            const done =
-              assignment?.kind === "act" &&
-              assignmentIds(assignment).every(
-                (id) => state.acts.find((a) => a.id === id)?.done,
+            if (assignment?.kind === "act")
+              return (
+                <CalendarGap
+                  key={g.key}
+                  state={state}
+                  gap={g}
+                  selected={gap?.key === g.key}
+                  hourHeight={HOUR_HEIGHT}
+                  dayStart={start}
+                  onSelect={select}
+                />
               )
-            const Icon =
-              assignment?.kind === "act"
-                ? Check
-                : assignment?.kind === "open"
-                  ? Leaf
-                  : Clock3
+            const title =
+              assignment?.kind === "open"
+                ? "Kept open"
+                : assignment?.kind === "skip"
+                  ? "Decide later"
+                  : "Free gap"
+            const Icon = assignment?.kind === "open" ? Leaf : Clock3
             return (
               <Button
                 key={g.key}
                 className={`calendar-gap ${
                   gap?.key === g.key ? "is-selected" : ""
                 } ${assignment?.kind === "open" ? "is-open" : ""} ${
-                  assignment?.kind === "act" ? "is-planned" : ""
-                } ${day === 0 && g.end <= state.now ? "is-past" : ""} ${
-                  raw.total < 60 ? "is-short" : ""
-                } ${raw.total < 135 ? "is-compact" : ""} ${
-                  assignment ? "has-choice" : ""
-                }`}
+                  day === 0 && g.end <= state.now ? "is-past" : ""
+                } ${raw.total < 60 ? "is-short" : ""} ${
+                  raw.total < 135 ? "is-compact" : ""
+                } ${assignment ? "has-choice" : ""}`}
                 style={{
                   top: offset(raw.start),
                   height: Math.max(44, offset(raw.end) - offset(raw.start) - 3),
@@ -159,13 +164,7 @@ export default function DayCalendar({
                 data-start={raw.start}
                 data-end={raw.end}
                 onClick={() => {
-                  onGap(g)
-                  if (window.innerWidth < 850)
-                    requestAnimationFrame(() =>
-                      document
-                        .querySelector(".planning-gap-panel")
-                        ?.scrollIntoView({ block: "start" }),
-                    )
+                  select(g)
                 }}
               >
                 <span
@@ -174,10 +173,7 @@ export default function DayCalendar({
                   }`}
                 >
                   <Icon size={13} />
-                  <strong>
-                    {title}
-                    {done && " · Completed"}
-                  </strong>
+                  <strong>{title}</strong>
                 </span>
                 <span className="calendar-gap-content">
                   <b>{g.usable} min usable</b>
@@ -220,6 +216,14 @@ export default function DayCalendar({
         <span>
           <i className="calendar-key-gap" />
           Gap · select to plan
+        </span>
+        <span>
+          <i className="calendar-key-planned" />
+          Planned activity
+        </span>
+        <span>
+          <i className="calendar-key-reserved" />
+          Walk + buffer reserved
         </span>
       </div>
       {canceled.length > 0 && (

@@ -320,13 +320,20 @@ export function evaluateSequence(
   g: Gap,
   p: Prefs,
   startAt = g.start,
+  notBefore: Record<string, number> = {},
 ): Sequence {
   let cursor = startAt,
     from = g.prev.location,
     walking = 0
   const evaluations: Eval[] = []
   for (const activity of activities) {
-    const e = evaluate(activity, g, p, from, cursor)
+    const e = evaluate(
+      activity,
+      g,
+      p,
+      from,
+      Math.max(cursor, notBefore[activity.id] ?? cursor),
+    )
     evaluations.push(e)
     walking += e.t1
     cursor = e.finish
@@ -351,8 +358,12 @@ export function evaluateSequence(
     reason:
       (evaluations.length === 1 ? evaluations[0].reason : constraint?.reason) ??
       (remaining < 0
-        ? `Doesn't fit. You need ${-remaining} more minutes for both activities and the complete route.`
-        : `${remaining} minutes remain after both activities, setup, walking, and your buffer.`),
+        ? `Doesn't fit. You need ${-remaining} more minutes for ${
+            activities.length === 2 ? "both activities" : "the activities"
+          } and the complete route.`
+        : `${remaining} minutes remain after ${
+            activities.length === 2 ? "both activities" : "all activities"
+          }, setup, walking, and your buffer.`),
   }
 }
 export function combos(fits: Eval[], g: Gap, p: Prefs) {

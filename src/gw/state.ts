@@ -23,6 +23,8 @@ export type Assignment = {
   day?: number
   start?: number
   end?: number
+  notBefore?: Record<string, number>
+  remainingChoice?: "open" | "skip"
 } | { kind: "open" } | { kind: "skip" }
 export type State = {
   version: 3
@@ -100,6 +102,7 @@ export function assignedSequence(s: State, g: Gap, a: Assignment) {
     a.kind === "act"
       ? Math.max(original.start, a.startAt ?? original.start)
       : original.start,
+    a.kind === "act" ? a.notBefore : undefined,
   )
 }
 export function suitableGaps(s: State, activity: Activity, exclude?: string) {

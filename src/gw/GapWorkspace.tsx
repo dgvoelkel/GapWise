@@ -28,18 +28,31 @@ import {
 import { EmptyState, FitBadge, RecommendationCard } from "./components"
 import { Button } from "./ui"
 import NowMapStrip from "./NowMapStrip"
+import { departureOf } from "./plan-time"
 
 export type GapActions = {
   onSelect: (id: string, location?: string) => void
-  onDetails: (id: string, g?: Gap, location?: string) => void
-  onMap: (g?: Gap, id?: string, location?: string) => void
-  onAssign: (g: Gap, ids: string[], location?: string) => void
+  onDetails: (
+    id: string,
+    g?: Gap,
+    location?: string,
+    remaining?: boolean,
+  ) => void
+  onMap: (g?: Gap, id?: string, location?: string, remaining?: boolean) => void
+  onAssign: (
+    g: Gap,
+    ids: string[],
+    location?: string,
+    remaining?: boolean,
+  ) => void
   onChoice: (g: Gap, kind: "open" | "skip") => void
   onClear: (key: string) => void
   onDone: (ids: string[]) => void
   onDismiss: (g: Gap, id: string) => void
   onRestore: (g: Gap) => void
   onFindTime: (a: Activity, exclude?: string) => void
+  onRemove: (g: Gap, id: string) => void
+  onRemainingChoice: (g: Gap, kind?: "open" | "skip") => void
 }
 type Props = {
   state: State
@@ -49,6 +62,7 @@ type Props = {
   actions: GapActions
   heading?: string
   withMap?: boolean
+  remaining?: boolean
 }
 const FILTERS = [
   ["short", "Short tasks"],
@@ -63,11 +77,13 @@ export function AssignmentCard({
   gap,
   assignment,
   actions,
+  availableMinutes,
 }: {
   state: State
   gap: Gap
   assignment: Assignment
   actions: GapActions
+  availableMinutes?: number
 }) {
   const ids = assignmentIds(assignment)
   const sequence = assignedSequence(state, gap, assignment)
@@ -123,12 +139,19 @@ export function AssignmentCard({
       {assignment.kind === "act" && (
         <p className="muted small">
           Scheduled at{" "}
-          {fmt(Math.max(gap.prev.end, assignment.startAt ?? gap.prev.end))}.
+          {fmt(
+            sequence.evaluations[0]
+              ? departureOf(sequence.evaluations[0])
+              : Math.max(gap.prev.end, assignment.startAt ?? gap.prev.end),
+          )}
+          .
         </p>
       )}
       {assignment.kind === "act" && !completed && (
         <p className={sequence.fit === "none" ? "warning-text" : "muted"}>
-          {sequence.reason}
+          {availableMinutes != null && sequence.fit !== "none"
+            ? `${availableMinutes} minutes are still available after the planned activities, walking, and arrival buffer.`
+            : sequence.reason}
         </p>
       )}
       <div className="button-row">
@@ -138,7 +161,8 @@ export function AssignmentCard({
             size="small"
             onClick={() => actions.onDone(ids)}
           >
-            Mark {ids.length > 1 ? "both " : ""}completed
+            Mark {ids.length === 2 ? "both " : ids.length > 2 ? "all " : ""}
+            completed
           </Button>
         )}
         {assignment.kind === "act" && (
@@ -180,6 +204,7 @@ export default function GapWorkspace({
   actions,
   heading = "Recommended for this gap",
   withMap = false,
+  remaining = false,
 }: Props) {
   const [filters, setFilters] = useState<string[]>([])
   const [showAll, setShowAll] = useState(false)
@@ -370,10 +395,10 @@ export default function GapWorkspace({
             variant="secondary"
             onClick={() => actions.onChoice(gap, "open")}
           >
-            Keep this gap open
+            {remaining ? "Keep remaining time open" : "Keep this gap open"}
           </Button>
           <Button size="small" onClick={() => actions.onChoice(gap, "skip")}>
-            Skip for now
+            {remaining ? "Decide about this time later" : "Skip for now"}
           </Button>
           {rest && evaluate(rest, gap, state.prefs).fit !== "none" && (
             <Button

@@ -1,10 +1,18 @@
+import { useState } from "react"
 import { ArrowUp, MapPin, Plus } from "lucide-react"
 import { type Gap, DATE_LABELS, DAYS, fmt, gapsFor } from "./logic"
 import { type State } from "./state"
 import { EmptyState, TimeSummary } from "./components"
 import GapWorkspace, { type GapActions } from "./GapWorkspace"
 import DayCalendar from "./DayCalendar"
+import { type GapFocus } from "./CalendarGap"
+import PlanGapDetails from "./PlanGapDetails"
 import { Button } from "./ui"
+
+type Portion = {
+  key: string
+  focus: GapFocus
+}
 
 export default function PlanAhead({
   state,
@@ -29,6 +37,7 @@ export default function PlanAhead({
   onAdd: () => void
   actions: GapActions
 }) {
+  const [portion, setPortion] = useState<Portion>()
   const commitments = state.cs
     .filter((c) => c.day === day)
     .sort((a, b) => a.start - b.start)
@@ -67,6 +76,10 @@ export default function PlanAhead({
           onGap={onGap}
           onCommitment={onCommitment}
           onAdd={onAdd}
+          onPart={(g, focus) => {
+            setPortion({ key: g.key, focus })
+            if (focus.kind === "activity") actions.onSelect(focus.id)
+          }}
         />
         <section className="planning-gap-panel" aria-label="Selected gap">
           <Button
@@ -105,16 +118,34 @@ export default function PlanAhead({
                   Before <b>{gap.next.title}</b> · {gap.next.location}
                 </span>
               </div>
-              <TimeSummary g={gap} compact />
-              <GapWorkspace
-                key={gap.key}
-                state={state}
-                gap={gap}
-                selectedId={selectedId}
-                selectedLocation={selectedLocation}
-                actions={actions}
-                heading="Activities that fit"
-              />
+              {state.assign[gap.key]?.kind === "act" ? (
+                <PlanGapDetails
+                  state={state}
+                  gap={gap}
+                  focus={
+                    portion?.key === gap.key
+                      ? portion.focus
+                      : { kind: "overview" }
+                  }
+                  selectedId={selectedId}
+                  selectedLocation={selectedLocation}
+                  actions={actions}
+                  onFocus={(focus) => setPortion({ key: gap.key, focus })}
+                />
+              ) : (
+                <>
+                  <TimeSummary g={gap} compact />
+                  <GapWorkspace
+                    key={gap.key}
+                    state={state}
+                    gap={gap}
+                    selectedId={selectedId}
+                    selectedLocation={selectedLocation}
+                    actions={actions}
+                    heading="Activities that fit"
+                  />
+                </>
+              )}
             </>
           ) : (
             <EmptyState

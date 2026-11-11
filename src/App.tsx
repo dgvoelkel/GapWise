@@ -56,6 +56,13 @@ import { Confirmation, EmptyState, FitBadge, Sheet } from "./gw/components"
 import { type GapActions } from "./gw/GapWorkspace"
 import { type Selection } from "./gw/MapPanel"
 import { Button, RangeInput } from "./gw/ui"
+import {
+  appendToGap,
+  remainingState,
+  remainingWindow,
+  removeFromGap,
+  scheduledActivityGap,
+} from "./gw/plan-time"
 
 type Tab = "today" | "plan" | "map" | "acts" | "settings"
 type Detail = {
@@ -63,6 +70,7 @@ type Detail = {
   id: string
   gapKey?: string
   location?: string
+  remainingStart?: number
 }
 type Modal = Detail | {
   kind: "activity"
@@ -106,6 +114,7 @@ export default function App() {
   const [planDay, setPlanDay] = useState(0)
   const [planKey, setPlanKey] = useState<string>()
   const [mapKey, setMapKey] = useState<string>()
+  const [mapRemainingStart, setMapRemainingStart] = useState<number>()
   const [selection, setSelection] = useState<Selection>(() => {
     const current = allGaps(state.cs, state.prefs).find(
       (g) => g.day === 0 && g.start <= state.now && g.end > state.now,
@@ -157,7 +166,11 @@ export default function App() {
     gaps.find((g) => g.key === mapKey && futureGap(g, state.now)) ??
     rightBase ??
     gaps.find((g) => futureGap(g, state.now))
-  const mapGap = mapBase && effective(mapBase)
+  const mapWindow =
+    mapBase && mapRemainingStart != null
+      ? remainingWindow(state, mapBase, mapRemainingStart)
+      : undefined
+  const mapGap = mapWindow?.gap ?? (mapBase && effective(mapBase))
   const contextGap =
     tab === "plan" ? planGap : tab === "map" ? mapGap : rightGap
   const issues = useMemo(() => assignmentIssues(state), [state])
@@ -175,8 +188,10 @@ export default function App() {
     setNotice(`Undone. ${last.label}`)
   }
   const pickGap = (g: Gap) => {
-    if (tab === "map") setMapKey(g.key)
-    else {
+    if (tab === "map") {
+      setMapKey(g.key)
+      setMapRemainingStart(undefined)
+    } else {
       setPlanDay(g.day)
       setPlanKey(g.key)
     }
@@ -207,10 +222,46 @@ export default function App() {
       locations: location ? { [a.id]: location } : undefined,
     })
   }
-  const assign = (requested: Gap, ids: string[], location?: string) => {
+  const assign = (
+    requested: Gap,
+    ids: string[],
+    location?: string,
+    remaining = false,
+  ) => {
     const original = gaps.find((g) => g.key === requested.key)
     if (!original || !futureGap(original, state.now)) {
       setNotice("This gap is no longer available. Choose an upcoming gap.")
+      return
+    }
+    if (remaining) {
+      const result = appendToGap(state, requested, ids, location)
+      if ("error" in result) {
+        setNotice(result.error)
+        setModal({
+          kind: "details",
+          id: ids[0],
+          gapKey: original.key,
+          location,
+          remainingStart: requested.start,
+        })
+        return
+      }
+      change(
+        {
+          ...state,
+          assign: { ...state.assign, [original.key]: result.assignment },
+        },
+        `${ids.map((id) => state.acts.find((a) => a.id === id)?.title).join(" + ")} added to the available time. Your earlier plan has been kept.`,
+      )
+      setSelection({ id: ids[0], location })
+      setModal(null)
+      setMapRemainingStart(undefined)
+      if (tab === "map") {
+        setPlanDay(original.day)
+        setPlanKey(original.key)
+        setMapReturn(undefined)
+        setTab("plan")
+      }
       return
     }
     const g = effective(original)
@@ -291,19 +342,28 @@ export default function App() {
       },
       done
         ? ids.length > 1
-          ? "Both activities marked completed."
+          ? ids.length === 2
+            ? "Both activities marked completed."
+            : "All activities marked completed."
           : "Activity marked completed."
         : "Activity marked unfinished.",
     )
   }
   const actions: GapActions = {
     onSelect: (id, location) => setSelection({ id, location }),
-    onDetails: (id, g, location) => {
+    onDetails: (id, g, location, remaining) => {
       setSelection({ id, location })
-      setModal({ kind: "details", id, gapKey: g?.key, location })
+      setModal({
+        kind: "details",
+        id,
+        gapKey: g?.key,
+        location,
+        remainingStart: remaining ? g?.start : undefined,
+      })
     },
-    onMap: (g, id, location) => {
+    onMap: (g, id, location, remaining) => {
       setMapKey(g?.key)
+      setMapRemainingStart(remaining ? g?.start : undefined)
       if (id) setSelection({ id, location })
       setMapReturn({ tab, detail: modal?.kind === "details" })
       setModal(null)
@@ -339,6 +399,37 @@ export default function App() {
         "Dismissed activities restored.",
       ),
     onFindTime: openFindTime,
+    onRemove: (requested, id) => {
+      const g = gaps.find((g) => g.key === requested.key)
+      if (!g) return
+      const choice = removeFromGap(state, g, id)
+      const assign = { ...state.assign }
+      if (choice) assign[g.key] = choice
+      else delete assign[g.key]
+      change(
+        { ...state, assign },
+        "Activity removed from this gap. Its time is available again.",
+      )
+      if (selection.id === id) setSelection({ id: "" })
+    },
+    onRemainingChoice: (g, kind) => {
+      const choice = state.assign[g.key]
+      if (choice?.kind !== "act") return
+      change(
+        {
+          ...state,
+          assign: {
+            ...state.assign,
+            [g.key]: { ...choice, remainingChoice: kind },
+          },
+        },
+        kind === "open"
+          ? "Remaining time kept open. Your scheduled activities are unchanged."
+          : kind === "skip"
+            ? "Remaining time left for later. Your scheduled activities are unchanged."
+            : "Remaining time is available to plan again.",
+      )
+    },
   }
   const changeSchedule = (cs: Commitment[], commitment: Commitment) => {
     const next = reconcileSchedule(state, cs)
@@ -416,6 +507,13 @@ export default function App() {
       assignments = { ...state.assign }
     for (const [key, a] of Object.entries(assignments)) {
       if (a.kind !== "act" || !assignmentIds(a).includes(id)) continue
+      const gap = gaps.find((g) => g.key === key)
+      if (gap) {
+        const choice = removeFromGap(state, gap, id)
+        if (choice) assignments[key] = choice
+        else delete assignments[key]
+        continue
+      }
       const ids = assignmentIds(a).filter((x) => x !== id)
       if (!ids.length) delete assignments[key]
       else
@@ -437,6 +535,7 @@ export default function App() {
   const navigate = (next: Tab) => {
     if (next === "map") {
       setMapKey(contextGap?.key)
+      setMapRemainingStart(undefined)
       setMapReturn(undefined)
     }
     setModal(null)
@@ -461,6 +560,7 @@ export default function App() {
         id: selection.id,
         gapKey: mapGap?.key,
         location: selection.location,
+        remainingStart: mapWindow?.gap.start,
       })
     setMapReturn(undefined)
   }
@@ -505,6 +605,7 @@ export default function App() {
       next[g.key] = {
         ...moving,
         startAt: g.start,
+        notBefore: undefined,
         day: g.day,
         start: g.start,
         end: g.end,
@@ -527,14 +628,32 @@ export default function App() {
       ? gaps.find((g) => g.key === modal.gapKey)
       : undefined
   const detailChoice = detailBase && state.assign[detailBase.key]
+  const detailWindow =
+    detailBase && modal?.kind === "details" && modal.remainingStart != null
+      ? remainingWindow(state, detailBase, modal.remainingStart)
+      : undefined
   const detailGap =
-    detailBase &&
-    (detailChoice?.kind === "act"
-      ? gapAtTime(
-          detailBase,
-          Math.max(detailBase.start, detailChoice.startAt ?? detailBase.start),
-        )
-      : effective(detailBase))
+    detailWindow?.gap ??
+    (detailBase &&
+      (detailChoice?.kind === "act"
+        ? scheduledActivityGap(state, detailBase, detailActivity?.id ?? "")
+        : effective(detailBase)))
+  const detailActions: GapActions = detailWindow
+    ? {
+        ...actions,
+        onAssign: (g, ids, location) => assign(g, ids, location, true),
+        onMap: (g, id, location) => actions.onMap(g, id, location, true),
+      }
+    : actions
+  const mapActions: GapActions = mapWindow
+    ? {
+        ...actions,
+        onAssign: (g, ids, location) => assign(g, ids, location, true),
+        onDetails: (id, g, location) =>
+          actions.onDetails(id, g, location, true),
+        onMap: (g, id, location) => actions.onMap(g, id, location, true),
+      }
+    : actions
   const changePrefs = (prefs: Prefs) =>
     change(
       { ...state, prefs },
@@ -726,10 +845,12 @@ export default function App() {
             )}
             {tab === "map" && (
               <MapExplorer
-                state={state}
+                state={
+                  mapWindow && mapBase ? remainingState(state, mapBase) : state
+                }
                 gap={mapGap}
                 selection={selection}
-                actions={actions}
+                actions={mapActions}
                 onGap={pickGap}
                 onCommitment={openCommitment}
                 onPlan={pageToPlan}
@@ -774,9 +895,13 @@ export default function App() {
         <ActivityDetails
           activity={detailActivity}
           gap={detailGap}
-          state={state}
+          state={
+            detailWindow && detailBase
+              ? remainingState(state, detailBase)
+              : state
+          }
           location={modal.location}
-          actions={actions}
+          actions={detailActions}
           onClose={() => setModal(null)}
           onEdit={() =>
             setModal({
