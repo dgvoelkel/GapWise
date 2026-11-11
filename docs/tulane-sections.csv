@@ -1,0 +1,14 @@
+persona,slot,course,title,term,section,days,start,end,building,room
+stella,epi,SPHU 3170,Foundations of Epidemiology,,,,,,Howard-Tilton Library,B11
+stella,biostat,SPHU 2160,Biostatistics in Public Health,,,,,,Boggs Center,239
+stella,finance,FINE 3010,Financial Management,,,,,,Goldring/Woldenberg,116
+stella,social,SPHU 3110,Social and Behavioral Perspectives in Public Health,,,,,,Tilton Memorial Hall,301
+ryan,first,MATH 2170,Intro To Discrete Math,,,,,,Stanley Thomas Hall,302
+ryan,second,CMPS 3140,Intro Artificial Intelligence,,,,,,Dinwiddie Hall,108
+ryan,algorithms,CMPS 2200,Intro to Algorithms,,,,,,Stanley Thomas Hall,302
+ryan,linalg,MATH 3090,Linear Algebra,,,,,,Richardson Building,108
+ryan,studio,CMPS 3300,Software Studio,,,,,,Stanley Thomas Hall,302
+chloe,seminar,CMPS 6160,Introduction to Data Science,,,,,,Stanley Thomas Hall,302
+chloe,afternoon,CMPS 6240,Intro to Machine Learning,,,,,,Stanley Thomas Hall,302
+chloe,stats,MATH 6080,Intro to Statistical Inference,,,,,,Gibson Hall,310
+chloe,viz,CMPS 6360,Data Visualization,,,,,,Stanley Thomas Hall,302
