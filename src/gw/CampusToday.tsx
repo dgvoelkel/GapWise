@@ -4,6 +4,7 @@ import { type State } from "./state"
 import { EmptyState, TimeSummary } from "./components"
 import GapWorkspace, { type GapActions } from "./GapWorkspace"
 import { type Selection } from "./MapPanel"
+import { gapTimeline } from "./plan-time"
 import { Button } from "./ui"
 
 type Props = {
@@ -27,6 +28,10 @@ export default function CampusToday({
       c.day === 0 && !c.canceled && c.start <= state.now && c.end > state.now,
   )
   const upcoming = gap && state.now < gap.start
+  const timeline =
+    gap && state.assign[gap.key]?.kind === "act"
+      ? gapTimeline(state, gap)
+      : undefined
   return (
     <main className="workspace-page right-now-page">
       <header className="page-heading">
@@ -51,7 +56,7 @@ export default function CampusToday({
       {gap ? (
         <>
           <section className="now-card" aria-label="Your next decision">
-            <TimeSummary g={gap} now={state.now} />
+            <TimeSummary g={gap} now={state.now} timeline={timeline} />
             <GapWorkspace
               key={gap.key}
               state={state}
