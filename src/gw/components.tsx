@@ -23,7 +23,11 @@ import {
   priorityLabel,
 } from "./logic"
 import { activityIcon } from "./map/filters"
-import CampusMapGL, { type MapPin as MapPinSpec, routeLegs } from "./map/CampusMapGL"
+import { type GapPartKind, type GapTimeline } from "./plan-time"
+import CampusMapGL, {
+  type MapPin as MapPinSpec,
+  routeLegs,
+} from "./map/CampusMapGL"
 import { Button } from "./ui"
 
 export function Sheet({
@@ -141,11 +145,28 @@ export function TimeSummary({
   g,
   now,
   compact = false,
+  timeline,
 }: {
   g: Gap
   now?: number
   compact?: boolean
+  timeline?: GapTimeline
 }) {
+  // The current gap starts at the planning clock. Count only the portions
+  // still ahead, so time already spent on an activity is not deducted twice.
+  const minutes = (kind: GapPartKind) =>
+    timeline?.parts
+      .filter((part) => part.kind === kind)
+      .reduce(
+        (total, part) =>
+          total + Math.max(0, part.end - Math.max(part.start, g.start)),
+        0,
+      ) ?? 0
+  const usable = timeline?.available ?? g.usable
+  const walking = timeline ? minutes("walking") : g.travel
+  const buffer = timeline ? minutes("buffer") : g.buffer
+  const planned = minutes("activity")
+  const waiting = minutes("waiting")
   return (
     <section
       className={`time-summary ${compact ? "is-compact" : ""}`}
@@ -158,19 +179,28 @@ export function TimeSummary({
             : "Available between commitments"}
         </div>
         <h2>
-          <strong>{g.usable}</strong> usable minutes
+          <strong>{usable}</strong> usable minutes
         </h2>
         <div className="time-equation">
           <span>{g.total} min gap</span>
-          <span>− {g.travel} min walking</span>
-          <span>− {g.buffer} min buffer</span>
-          <b>= {g.usable} min usable</b>
+          {planned > 0 && <span>− {planned} min planned (incl. setup)</span>}
+          <span>− {walking} min walking</span>
+          {waiting > 0 && <span>− {waiting} min opening wait</span>}
+          <span>− {buffer} min buffer</span>
+          <b>= {usable} min usable</b>
         </div>
-        {g.total < g.travel + g.buffer && (
+        {timeline?.sequence?.fit === "none" ? (
           <p className="warning-text">
-            Walking and your buffer need {g.travel + g.buffer - g.total} more
-            minutes than this gap allows.
+            Plan needs review. {timeline.sequence.reason}
           </p>
+        ) : (
+          !timeline &&
+          g.total < g.travel + g.buffer && (
+            <p className="warning-text">
+              Walking and your buffer need {g.travel + g.buffer - g.total} more
+              minutes than this gap allows.
+            </p>
+          )
         )}
       </div>
       <div className="next-event">
@@ -231,7 +261,13 @@ export function RoutePreview({
   ]
   return (
     <div className="route-preview">
-      <CampusMapGL fit="content" legs={legs} pins={pins} onTap={onExpand} tapLabel="Expand map" />
+      <CampusMapGL
+        fit="content"
+        legs={legs}
+        pins={pins}
+        onTap={onExpand}
+        tapLabel="Expand map"
+      />
       <Button variant="secondary" size="small" onClick={onExpand}>
         <MapPin size={14} />
         Expand map

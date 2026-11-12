@@ -84,3 +84,12 @@ One line per meaningful proposal, with what Davis accepted, changed, or rejected
 
 - `make build` and `make preview` smoke-tested at 390 px through the mobile Playwright project (all specs) and manual screenshots of the picker, Right Now, Plan and Map tabs.
 - Hosting is Davis's step: import the GitHub repo at vercel.com (Vite preset, `pnpm build`, output `dist`, install `pnpm install`). The Figma plugins and `.figma/make/site.json` are intact (`make figma-check`). Fallback: `make dist` → `gapwise-dist.zip` for Netlify Drop.
+
+## Right Now usable-time fix (2026-11-11)
+
+- Elena requested the fix after Davis reported that adding an activity did not update Right Now's usable-minutes headline. Proposed for Davis's pull-request review.
+- Baseline: TypeScript check, all 55 unit tests, and the production build passed. Browser tests could not launch Chromium in this environment (`socket() failed: Operation not permitted`); this also happened before the fix. The preview server required the local-only environment setting `FIGMA_DEV_SERVER_HOST=127.0.0.1`; no repository configuration was changed.
+- `CampusToday` now passes the existing `gapTimeline` result to `TimeSummary` for activity assignments, matching Plan's available-time calculation. The receipt shows planned time (including setup), walking, opening waits when present, and the arrival buffer. Only future portions are deducted as the planning clock advances.
+- Selecting a recommendation remains a preview. The time is reserved when the user presses Add to gap; clearing or undoing an assignment restores it. No fit, ranking, travel, or schedule data was changed.
+- Added three browser regression scenarios, each configured for desktop and mobile: preview/add/undo, Plan-to-Right-Now consistency, and clock advancement. Test collection passed; browser execution remains unverified due to the environment limitation above.
+- Verification: TypeScript, 55/55 unit tests, production build, and Vite server-render checks passed. Render checks covered initial Stella (48), Print (38), Lunch (13), Print + Coffee (28), Print with the clock advanced to 11:30 (25), and restoring the unassigned state (48).
