@@ -69,7 +69,11 @@ export default function NowMapStrip({
     >
       <header className="now-strip-heading">
         <span>
-          {sequence ? "Your planned route" : "Suggestions on your way"}
+          {sequence
+            ? "Your planned route"
+            : options.length
+              ? "Suggestions on your way"
+              : "Your walk to the next commitment"}
         </span>
         <Button
           size="small"

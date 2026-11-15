@@ -56,14 +56,18 @@ test("an empty schedule still works through the manual forms", async ({ page }) 
   await expect(page.locator(".schedule-source")).toContainText("your own entries")
 })
 
-test("Ryan at 10:50 gets the quiet state: nothing to add, head to Dinwiddie Hall, no map strip", async ({
+test("Ryan at 10:50 gets the quiet state: nothing to add, head to Dinwiddie Hall, and the map still shows his walk", async ({
   page,
 }) => {
   await open(page, "persona=ryan&t=10:50")
   await expect(usable(page)).toContainText("6")
   await expect(page.locator(".now-card")).toContainText("Head to Dinwiddie Hall.")
   await expect(page.locator(".now-card")).toContainText("0 activities fit")
-  await expect(page.locator(".now-map-strip")).toHaveCount(0)
+  const strip = page.locator(".now-map-strip")
+  await expect(strip).toBeVisible()
+  await expect(strip).toContainText("Your walk to the next commitment")
+  await expect(strip).toContainText("Direct to next commitment")
+  await expect(strip.getByRole("button", { name: /^Suggestion/ })).toHaveCount(0)
   await expect(page.locator(".now-card")).toContainText("You don’t have to fill every gap.")
 })
 
@@ -225,4 +229,29 @@ test("the help sheet describes the current tab and lists the persona's tasks", a
   await expect(dialog(page)).toContainText("Plan Thursday, or don't")
   await dialog(page).getByRole("button", { name: "Got it" }).click()
   await expect(dialog(page)).toHaveCount(0)
+})
+
+test("after adding one activity on Right Now, the remaining time in the same gap can take another", async ({
+  page,
+}) => {
+  await open(page, "persona=stella&t=11:00")
+  await card(page, "Print assignment").getByRole("button", { name: "Add to gap", exact: true }).click()
+  await expect(usable(page)).toContainText("38")
+  const remaining = page.getByRole("region", { name: "Remaining available time" })
+  await expect(remaining).toContainText("still available")
+  await remaining
+    .getByRole("article", { name: "Coffee", exact: true })
+    .getByRole("button", { name: "Add to gap", exact: true })
+    .click()
+  await expect(page.locator(".assignment-card h3")).toContainText("Print assignment + Coffee")
+  await expect(usable(page)).toContainText("28")
+  const saved = await readState(page)
+  expect(Object.values(saved.assign).map((a: any) => a.ids)).toEqual([["print", "coffee"]])
+  await page
+    .getByRole("region", { name: "Remaining available time" })
+    .getByRole("button", { name: "Keep remaining time open" })
+    .click()
+  await expect(page.getByRole("region", { name: "Remaining available time" })).toContainText("kept open")
+  await undo(page)
+  await expect(page.getByRole("region", { name: "Remaining available time" })).toContainText("still available")
 })
