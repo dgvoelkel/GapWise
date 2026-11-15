@@ -28,7 +28,7 @@ import {
 import { EmptyState, FitBadge, RecommendationCard } from "./components"
 import { Button } from "./ui"
 import NowMapStrip from "./NowMapStrip"
-import { departureOf } from "./plan-time"
+import { departureOf, remainingState, remainingWindow } from "./plan-time"
 
 export type GapActions = {
   onSelect: (id: string, location?: string) => void
@@ -266,6 +266,7 @@ export default function GapWorkspace({
           assignment={assignment}
           actions={actions}
         />
+        {withMap && <RemainingTime state={state} gap={gap} actions={actions} />}
       </div>
     )
   }
@@ -277,7 +278,7 @@ export default function GapWorkspace({
     )
   return (
     <div className="gap-workspace">
-      {withMap && shown.length > 0 && (
+      {withMap && (
         <NowMapStrip
           gap={gap}
           evaluations={shown}
@@ -507,5 +508,77 @@ export default function GapWorkspace({
         </Button>
       )}
     </div>
+  )
+}
+
+/**
+ * Right Now: after one activity is planned, offer the time that is still free
+ * in the same gap (Plan already does this in PlanGapDetails).
+ */
+function RemainingTime({
+  state,
+  gap,
+  actions,
+}: {
+  state: State
+  gap: Gap
+  actions: GapActions
+}) {
+  const assignment = state.assign[gap.key]
+  if (assignment?.kind !== "act") return null
+  const ids = assignmentIds(assignment)
+  if (ids.every((id) => state.acts.find((a) => a.id === id)?.done)) return null
+  const window = remainingWindow(state, gap)
+  if (!window || window.gap.usable <= 0) return null
+  const remainingActions: GapActions = {
+    ...actions,
+    onAssign: (g, ids, location) => actions.onAssign(g, ids, location, true),
+    onDetails: (id, g, location) => actions.onDetails(id, g, location, true),
+    onMap: (g, id, location) => actions.onMap(g, id, location, true),
+    onChoice: (_, kind) => actions.onRemainingChoice(gap, kind),
+  }
+  if (assignment.remainingChoice)
+    return (
+      <section
+        className="plan-remaining-time"
+        aria-label="Remaining available time"
+      >
+        <div className="section-heading">
+          <h3>
+            {window.gap.usable} min{" "}
+            {assignment.remainingChoice === "open"
+              ? "kept open"
+              : "left for later"}
+          </h3>
+          {assignment.remainingChoice === "open" && <Leaf size={17} />}
+        </div>
+        <Button
+          variant="secondary"
+          size="small"
+          onClick={() => actions.onRemainingChoice(gap)}
+        >
+          <RotateCcw size={13} />
+          Plan this time instead
+        </Button>
+      </section>
+    )
+  return (
+    <section
+      className="plan-remaining-time"
+      aria-label="Remaining available time"
+    >
+      <p className="small muted">
+        {fmt(window.start)}–{fmt(window.end)} is still free. Walking to{" "}
+        {gap.next.location} and your arrival buffer stay reserved.
+      </p>
+      <GapWorkspace
+        key={`${gap.key}-${window.gap.start}`}
+        state={remainingState(state, gap)}
+        gap={window.gap}
+        actions={remainingActions}
+        remaining
+        heading={`Add more · ${window.gap.usable} min still available`}
+      />
+    </section>
   )
 }
